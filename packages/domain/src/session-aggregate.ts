@@ -168,6 +168,41 @@ export class SessionAggregate {
     return [event("session.resumed", meta, { actorId })];
   }
 
+  executeCommand(
+    driverId: string,
+    command: {
+      executable: string;
+      args?: string[];
+      environment?: Record<string, string>;
+      timeoutMs?: number;
+    },
+    meta: Metadata,
+  ): PendingEvent[] {
+    this.requireDriver(driverId);
+    if (this.status !== "running") {
+      throw new DomainError("not_running", "Commands require a running execution");
+    }
+    if (!command.executable.trim()) {
+      throw new DomainError("invalid_command", "Command executable is required");
+    }
+    return [event("workspace.command_requested", meta, { ...command, requestedBy: driverId })];
+  }
+
+  createCheckpoint(driverId: string, summary: string, meta: Metadata): PendingEvent[] {
+    this.requireDriver(driverId);
+    return [event("checkpoint.requested", meta, { summary, requestedBy: driverId })];
+  }
+
+  restoreCheckpoint(driverId: string, checkpointId: string, meta: Metadata): PendingEvent[] {
+    this.requireDriver(driverId);
+    return [
+      event("checkpoint.restore_requested", meta, {
+        checkpointId,
+        requestedBy: driverId,
+      }),
+    ];
+  }
+
   pause(actorId: string, reason: string, meta: Metadata): PendingEvent[] {
     this.requireParticipant(actorId);
     if (this.status !== "running") {

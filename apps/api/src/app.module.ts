@@ -15,9 +15,19 @@ import { SessionsController } from "./sessions.controller.js";
 import { SessionsService } from "./sessions.service.js";
 import { ProviderOrchestratorService } from "./provider/provider-orchestrator.service.js";
 import { RedisService } from "./realtime/redis.service.js";
+import { WorkspaceManager } from "@parallel/workspace-runtime";
+import { resolve } from "node:path";
+import { WorkspacesController } from "./workspaces/workspaces.controller.js";
+import { WorkspacesService } from "./workspaces/workspaces.service.js";
 
 @Module({
-  controllers: [AuthController, HealthController, OrganizationsController, SessionsController],
+  controllers: [
+    AuthController,
+    HealthController,
+    OrganizationsController,
+    SessionsController,
+    WorkspacesController,
+  ],
   providers: [
     {
       provide: PG_POOL,
@@ -36,6 +46,14 @@ import { RedisService } from "./realtime/redis.service.js";
     ProviderOrchestratorService,
     OutboxDispatcherService,
     RedisService,
+    WorkspacesService,
+    {
+      provide: WorkspaceManager,
+      useFactory: () =>
+        new WorkspaceManager(
+          resolve(process.env.WORKSPACE_ROOT ?? ".parallel/workspaces"),
+        ),
+    },
     SessionsService,
     LiveGateway,
   ],

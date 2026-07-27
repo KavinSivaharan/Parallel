@@ -61,10 +61,18 @@ export interface Checkpoint {
   workspaceId: string;
   commitHash: string;
   parentCommitHash: string | null;
+  parentCheckpointId: string | null;
   summary: string;
   createdAt: string;
   branch: string;
   clean: boolean;
+}
+
+export interface CheckpointComparison {
+  from: Checkpoint;
+  to: Checkpoint;
+  files: FileChange[];
+  patch: string;
 }
 
 export interface StoredArtifact {
@@ -78,4 +86,3 @@ export interface StoredArtifact {
   version: number;
   createdAt: string;
 }
-

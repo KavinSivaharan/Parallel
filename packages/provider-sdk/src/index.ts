@@ -6,6 +6,49 @@ export type ProviderObservation = {
   | { kind: "output"; channel: "analysis" | "commentary" | "final"; text: string }
   | { kind: "tool"; phase: "started" | "completed"; name: string; callId: string }
   | { kind: "artifact"; mediaType: string; name: string; bytes: Uint8Array }
+  | {
+      kind: "workspace";
+      workspaceId: string;
+      repositoryPath: string;
+      repositoryUrl: string | null;
+      baseRef: string | null;
+      branch: string;
+      parentWorkspaceId: string | null;
+      parentCheckpoint: string | null;
+    }
+  | {
+      kind: "terminal";
+      phase: "started" | "stdout" | "stderr" | "completed";
+      commandId: string;
+      executable?: string;
+      args?: string[];
+      chunk?: string;
+      exitCode?: number | null;
+      durationMs?: number;
+    }
+  | { kind: "filesystem"; commandId: string; changes: Array<{
+      kind: "created" | "modified" | "deleted" | "renamed";
+      path: string;
+      previousPath?: string;
+    }> }
+  | { kind: "git_diff"; commandId: string; patch: string; files: Array<{
+      kind: "created" | "modified" | "deleted" | "renamed";
+      path: string;
+      previousPath?: string;
+    }> }
+  | {
+      kind: "checkpoint";
+      action: "created" | "restored";
+      checkpointId: string;
+      commitHash: string;
+      parentCommitHash: string | null;
+      parentCheckpointId: string | null;
+      summary: string;
+      createdAt: string;
+      branch: string;
+      clean: boolean;
+    }
+  | { kind: "error"; code: string; message: string }
 );
 
 export interface ProviderCapabilities {
@@ -14,6 +57,7 @@ export interface ProviderCapabilities {
   checkpoint: boolean;
   toolApproval: boolean;
   filesystemArtifacts: boolean;
+  shellExecution?: boolean;
 }
 
 export interface CreateExecutionRequest {
@@ -22,6 +66,11 @@ export interface CreateExecutionRequest {
   workspaceRef: string;
   initialInstruction: string;
   idempotencyKey: string;
+  repositoryUrl?: string;
+  baseRef?: string;
+  parentWorkspaceId?: string;
+  parentCheckpoint?: string;
+  observationSequence?: number;
 }
 
 export interface ProviderExecution {
@@ -29,9 +78,14 @@ export interface ProviderExecution {
   observations(): AsyncIterable<ProviderObservation>;
   start(): Promise<void>;
   steer(instruction: string, idempotencyKey: string): Promise<void>;
+  executeCommand(
+    request: { executable: string; args?: string[]; environment?: Record<string, string>; timeoutMs?: number },
+    idempotencyKey: string,
+  ): Promise<void>;
   pause(reason: string): Promise<{ cursor: string | null }>;
   resume(cursor: string | null): Promise<void>;
-  checkpoint(): Promise<{ providerState: string }>;
+  checkpoint(summary?: string): Promise<{ providerState: string }>;
+  restore(checkpointId: string, idempotencyKey: string): Promise<void>;
   dispose(): Promise<void>;
 }
 

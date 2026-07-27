@@ -24,13 +24,21 @@ export class SessionsController {
   @Post("sessions")
   create(
     @Principal() principal: AuthPrincipal,
-    @Body() body: { organizationId: string; title: string; providerId?: string },
+    @Body() body: {
+      organizationId: string;
+      title: string;
+      providerId?: string;
+      repositoryUrl?: string;
+      baseRef?: string;
+    },
   ) {
     return this.sessions.create({
       principal,
       organizationId: body.organizationId,
       title: body.title,
-      providerId: body.providerId ?? "simulator",
+      providerId: body.providerId ?? "local-workspace",
+      ...(body.repositoryUrl ? { repositoryUrl: body.repositoryUrl } : {}),
+      ...(body.baseRef ? { baseRef: body.baseRef } : {}),
     });
   }
 

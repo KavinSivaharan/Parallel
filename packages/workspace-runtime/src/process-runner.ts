@@ -21,11 +21,12 @@ export class ProcessRunner {
       startedAt: startedAt.toISOString(),
     };
 
-    const home = join(repositoryPath, ".parallel-home");
+    const home = join(repositoryPath, "..", "home");
     await mkdir(home, { recursive: true });
     const child = spawn(request.executable, request.args ?? [], {
       cwd: repositoryPath,
       env: isolatedEnvironment(home, request.environment),
+      detached: process.platform !== "win32",
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -59,11 +60,11 @@ export class ProcessRunner {
     });
 
     const abort = (): void => {
-      child.kill("SIGTERM");
+      terminate(child.pid, "SIGTERM");
     };
     signal?.addEventListener("abort", abort, { once: true });
     const timeout = request.timeoutMs
-      ? setTimeout(() => child.kill("SIGTERM"), request.timeoutMs)
+      ? setTimeout(() => terminate(child.pid, "SIGTERM"), request.timeoutMs)
       : undefined;
     timeout?.unref();
 
@@ -76,7 +77,7 @@ export class ProcessRunner {
     } finally {
       signal?.removeEventListener("abort", abort);
       if (timeout) clearTimeout(timeout);
-      if (!finished) child.kill("SIGKILL");
+      if (!finished) terminate(child.pid, "SIGKILL");
     }
     yield {
       kind: "command.completed",
@@ -85,6 +86,16 @@ export class ProcessRunner {
       signal: exitSignal,
       durationMs: Date.now() - startedAt.getTime(),
     };
+  }
+}
+
+function terminate(pid: number | undefined, signal: NodeJS.Signals): void {
+  if (!pid) return;
+  try {
+    if (process.platform === "win32") process.kill(pid, signal);
+    else process.kill(-pid, signal);
+  } catch {
+    // The process may have exited between observation and cancellation.
   }
 }
 

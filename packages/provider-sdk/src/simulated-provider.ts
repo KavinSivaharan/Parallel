@@ -19,6 +19,7 @@ export class SimulatedProvider implements AgentProvider {
     checkpoint: true,
     toolApproval: false,
     filesystemArtifacts: true,
+    shellExecution: false,
   };
 
   async createExecution(request: CreateExecutionRequest): Promise<ProviderExecution> {
@@ -71,12 +72,20 @@ class SimulatedExecution implements ProviderExecution {
     return { cursor: String(this.cursor) };
   }
 
+  async executeCommand(): Promise<void> {
+    throw new Error("The simulated provider does not execute shell commands");
+  }
+
   async resume(): Promise<void> {
     this.push({ kind: "status", status: "resumed" });
   }
 
   async checkpoint(): Promise<{ providerState: string }> {
     return { providerState: JSON.stringify({ cursor: this.cursor }) };
+  }
+
+  async restore(): Promise<void> {
+    throw new Error("The simulated provider does not persist real checkpoints");
   }
 
   async dispose(): Promise<void> {

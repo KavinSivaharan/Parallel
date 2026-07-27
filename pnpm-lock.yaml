@@ -38,6 +38,12 @@ importers:
       '@parallel/provider-sdk':
         specifier: workspace:*
         version: link:../../packages/provider-sdk
+      '@parallel/workspace-provider':
+        specifier: workspace:*
+        version: link:../../packages/workspace-provider
+      '@parallel/workspace-runtime':
+        specifier: workspace:*
+        version: link:../../packages/workspace-runtime
       '@socket.io/redis-adapter':
         specifier: ^8.3.0
         version: 8.3.0(socket.io-adapter@2.5.8)
@@ -150,6 +156,22 @@ importers:
 
   packages/provider-sdk:
     devDependencies:
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@24.13.3)(terser@5.49.0)
+
+  packages/workspace-provider:
+    dependencies:
+      '@parallel/provider-sdk':
+        specifier: workspace:*
+        version: link:../provider-sdk
+      '@parallel/workspace-runtime':
+        specifier: workspace:*
+        version: link:../workspace-runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.13.3
       vitest:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@24.13.3)(terser@5.49.0)

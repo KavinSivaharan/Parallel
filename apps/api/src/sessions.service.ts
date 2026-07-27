@@ -22,7 +22,10 @@ export interface Command {
     | "steering.reject"
     | "steering.send"
     | "session.pause"
-    | "session.resume";
+    | "session.resume"
+    | "workspace.execute"
+    | "checkpoint.create"
+    | "checkpoint.restore";
   expectedVersion: number;
   payload: Record<string, unknown>;
 }
@@ -72,9 +75,12 @@ export class SessionsService {
       media_type: string;
       byte_size: string;
       content_hash: string;
+      version: number;
+      created_by_event_id: string;
       created_at: Date;
     }>(
-      `SELECT id, name, media_type, byte_size, content_hash, created_at
+      `SELECT id, name, media_type, byte_size, content_hash, version,
+              created_by_event_id, created_at
        FROM artifacts WHERE branch_id = $1 ORDER BY created_at`,
       [branchId],
     );
@@ -84,6 +90,8 @@ export class SessionsService {
       mediaType: row.media_type,
       byteSize: Number(row.byte_size),
       contentHash: row.content_hash,
+      version: row.version,
+      createdByEventId: row.created_by_event_id,
       createdAt: row.created_at.toISOString(),
     }));
   }
@@ -121,6 +129,8 @@ export class SessionsService {
     organizationId: string;
     title: string;
     providerId: string;
+    repositoryUrl?: string;
+    baseRef?: string;
   }): Promise<{ sessionId: string; branchId: string; events: EventEnvelope[] }> {
     const role = await this.organizations.requireMembership(
       input.organizationId,
@@ -150,6 +160,11 @@ export class SessionsService {
         payload: {},
       },
     ];
+    const requested = pending.find((event) => event.type === "execution.requested");
+    if (requested) {
+      if (input.repositoryUrl) requested.payload.repositoryUrl = input.repositoryUrl;
+      if (input.baseRef) requested.payload.baseRef = input.baseRef;
+    }
     const result = await this.store.createSessionBranch({
       sessionId,
       branchId,
@@ -184,110 +199,156 @@ export class SessionsService {
     const requestHash = createHash("sha256").update(JSON.stringify(command)).digest("hex");
     const replay = await this.store.findIdempotent(scope, idempotencyKey, requestHash);
     if (replay) return replay.events;
-    const stream = await this.store.load(branchId);
-    if (stream.version !== command.expectedVersion) {
-      throw new ConcurrencyError(branchId, command.expectedVersion, stream.version);
-    }
-    const aggregate = SessionAggregate.rehydrate(branchId, stream.events);
     const meta = metadata(principal.userId);
-    let pending: PendingEvent[];
-    switch (command.type) {
-      case "participant.join":
-        pending = aggregate.join(principal.userId, meta);
-        break;
-      case "participant.leave":
-        pending = aggregate.leave(principal.userId, meta);
-        break;
-      case "driver.claim":
-        requireCanCollaborate(role);
-        pending = aggregate.claimDriver(principal.userId, meta);
-        break;
-      case "driver.request":
-        requireCanCollaborate(role);
-        pending = aggregate.requestDriver(principal.userId, meta);
-        break;
-      case "driver.transfer":
-        requireCanCollaborate(role);
-        pending = aggregate.transferDriver(
-          principal.userId,
-          stringField(command.payload, "toId"),
-          meta,
-        );
-        break;
-      case "steering.propose":
-        requireCanCollaborate(role);
-        pending = aggregate.proposeSteering(
-          stringField(command.payload, "proposalId"),
-          principal.userId,
-          stringField(command.payload, "instruction"),
-          meta,
-        );
-        break;
-      case "comment.create":
-        requireCanCollaborate(role);
-        pending = aggregate.comment(
-          stringField(command.payload, "commentId"),
-          principal.userId,
-          stringField(command.payload, "body"),
-          meta,
-        );
-        break;
-      case "steering.approve":
-        requireCanCollaborate(role);
-        pending = aggregate.approveSteering(
-          stringField(command.payload, "proposalId"),
-          principal.userId,
-          meta,
-        );
-        break;
-      case "steering.reject":
-        requireCanCollaborate(role);
-        pending = aggregate.rejectSteering(
-          stringField(command.payload, "proposalId"),
-          principal.userId,
-          meta,
-        );
-        break;
-      case "steering.send":
-        requireCanCollaborate(role);
-        pending = aggregate.steerDirect(
-          stringField(command.payload, "instruction"),
-          principal.userId,
-          meta,
-        );
-        break;
-      case "session.pause":
-        requireCanCollaborate(role);
-        pending = aggregate.pause(
-          principal.userId,
-          stringField(command.payload, "reason"),
-          meta,
-        );
-        break;
-      case "session.resume":
-        requireCanCollaborate(role);
-        pending = aggregate.resume(principal.userId, meta);
-        break;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const stream = await this.store.load(branchId);
+      const concurrent = stream.events.filter(
+        (event) => event.sequence > command.expectedVersion,
+      );
+      if (
+        command.expectedVersion > stream.version ||
+        concurrent.some((event) => event.actor.kind === "user")
+      ) {
+        throw new ConcurrencyError(branchId, command.expectedVersion, stream.version);
+      }
+      const aggregate = SessionAggregate.rehydrate(branchId, stream.events);
+      const pending = decideCommand(aggregate, role, principal.userId, command, meta);
+      try {
+        const result = await this.store.appendIdempotent({
+          streamId: branchId,
+          expectedVersion: stream.version,
+          events: pending,
+          scope,
+          key: idempotencyKey,
+          requestHash,
+        });
+        this.logger.log({
+          message: "domain command committed",
+          commandType: command.type,
+          branchId,
+          actorId: principal.userId,
+          idempotencyKey,
+          eventIds: result.events.map((event) => event.id),
+          correlationIds: result.events.map((event) => event.correlationId),
+        });
+        return result.events;
+      } catch (error) {
+        if (!(error instanceof ConcurrencyError) || attempt === 4) throw error;
+      }
     }
-    const result = await this.store.appendIdempotent({
-      streamId: branchId,
-      expectedVersion: command.expectedVersion,
-      events: pending,
-      scope,
-      key: idempotencyKey,
-      requestHash,
-    });
-    this.logger.log({
-      message: "domain command committed",
-      commandType: command.type,
-      branchId,
-      actorId: principal.userId,
-      idempotencyKey,
-      eventIds: result.events.map((event) => event.id),
-      correlationIds: result.events.map((event) => event.correlationId),
-    });
-    return result.events;
+    throw new Error("Unreachable command append retry state");
   }
+}
+
+function decideCommand(
+  aggregate: SessionAggregate,
+  role: OrganizationRole,
+  actorId: string,
+  command: Command,
+  meta: ReturnType<typeof metadata>,
+): PendingEvent[] {
+  switch (command.type) {
+    case "participant.join":
+      return aggregate.join(actorId, meta);
+    case "participant.leave":
+      return aggregate.leave(actorId, meta);
+    case "driver.claim":
+      requireCanCollaborate(role);
+      return aggregate.claimDriver(actorId, meta);
+    case "driver.request":
+      requireCanCollaborate(role);
+      return aggregate.requestDriver(actorId, meta);
+    case "driver.transfer":
+      requireCanCollaborate(role);
+      return aggregate.transferDriver(actorId, stringField(command.payload, "toId"), meta);
+    case "steering.propose":
+      requireCanCollaborate(role);
+      return aggregate.proposeSteering(
+        stringField(command.payload, "proposalId"),
+        actorId,
+        stringField(command.payload, "instruction"),
+        meta,
+      );
+    case "comment.create":
+      requireCanCollaborate(role);
+      return aggregate.comment(
+        stringField(command.payload, "commentId"),
+        actorId,
+        stringField(command.payload, "body"),
+        meta,
+      );
+    case "steering.approve":
+      requireCanCollaborate(role);
+      return aggregate.approveSteering(
+        stringField(command.payload, "proposalId"),
+        actorId,
+        meta,
+      );
+    case "steering.reject":
+      requireCanCollaborate(role);
+      return aggregate.rejectSteering(
+        stringField(command.payload, "proposalId"),
+        actorId,
+        meta,
+      );
+    case "steering.send":
+      requireCanCollaborate(role);
+      return aggregate.steerDirect(
+        stringField(command.payload, "instruction"),
+        actorId,
+        meta,
+      );
+    case "session.pause":
+      requireCanCollaborate(role);
+      return aggregate.pause(actorId, stringField(command.payload, "reason"), meta);
+    case "session.resume":
+      requireCanCollaborate(role);
+      return aggregate.resume(actorId, meta);
+    case "workspace.execute":
+      requireCanCollaborate(role);
+      return aggregate.executeCommand(actorId, commandPayload(command.payload), meta);
+    case "checkpoint.create":
+      requireCanCollaborate(role);
+      return aggregate.createCheckpoint(
+        actorId,
+        stringField(command.payload, "summary"),
+        meta,
+      );
+    case "checkpoint.restore":
+      requireCanCollaborate(role);
+      return aggregate.restoreCheckpoint(
+        actorId,
+        stringField(command.payload, "checkpointId"),
+        meta,
+      );
+  }
+}
+
+function commandPayload(payload: Record<string, unknown>): {
+  executable: string;
+  args?: string[];
+  environment?: Record<string, string>;
+  timeoutMs?: number;
+} {
+  const result: {
+    executable: string;
+    args?: string[];
+    environment?: Record<string, string>;
+    timeoutMs?: number;
+  } = { executable: stringField(payload, "executable") };
+  if (Array.isArray(payload.args)) result.args = payload.args.map(String);
+  if (isStringRecord(payload.environment)) result.environment = payload.environment;
+  if (typeof payload.timeoutMs === "number") result.timeoutMs = payload.timeoutMs;
+  return result;
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value).every((item) => typeof item === "string")
+  );
 }
 
 function metadata(actorId: string): {

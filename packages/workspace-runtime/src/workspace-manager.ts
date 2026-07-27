@@ -1,11 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   access,
-  cp,
   mkdir,
   readFile,
   rm,
-  stat,
   writeFile,
 } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
@@ -13,6 +11,7 @@ import { GitClient } from "./git-client.js";
 import { ProcessRunner } from "./process-runner.js";
 import type {
   Checkpoint,
+  CheckpointComparison,
   CreateWorkspaceRequest,
   ExecuteCommandRequest,
   RuntimeEvent,
@@ -92,6 +91,7 @@ export class WorkspaceManager {
     const metadata = await this.metadata(workspaceId);
     const git = new GitClient(metadata.repositoryPath);
     const parent = (await git.run(["rev-parse", "HEAD"], true)).trim() || null;
+    const history = await this.checkpoints(workspaceId);
     await git.run(["add", "-A"]);
     await git.run(["commit", "--allow-empty", "-m", `checkpoint: ${summary}`]);
     const commitHash = (await git.run(["rev-parse", "HEAD"])).trim();
@@ -100,12 +100,12 @@ export class WorkspaceManager {
       workspaceId,
       commitHash,
       parentCommitHash: parent,
+      parentCheckpointId: history.at(-1)?.id ?? null,
       summary,
       createdAt: new Date().toISOString(),
       branch: (await git.run(["branch", "--show-current"])).trim(),
       clean: (await git.status()).length === 0,
     };
-    const history = await this.checkpoints(workspaceId);
     await writeJson(this.paths(workspaceId).checkpoints, [...history, checkpoint]);
     return checkpoint;
   }
@@ -122,6 +122,24 @@ export class WorkspaceManager {
     await git.run(["reset", "--hard", checkpoint.commitHash]);
     await git.run(["clean", "-fd"]);
     return checkpoint;
+  }
+
+  async compareCheckpoints(
+    workspaceId: string,
+    fromCheckpointId: string,
+    toCheckpointId: string,
+  ): Promise<CheckpointComparison> {
+    const history = await this.checkpoints(workspaceId);
+    const from = history.find((item) => item.id === fromCheckpointId);
+    const to = history.find((item) => item.id === toCheckpointId);
+    if (!from || !to) throw new Error("Both checkpoints must belong to the workspace");
+    const repository = (await this.metadata(workspaceId)).repositoryPath;
+    const git = new GitClient(repository);
+    const [patch, names] = await Promise.all([
+      git.run(["diff", "--binary", "--no-ext-diff", from.commitHash, to.commitHash]),
+      git.run(["diff", "--name-status", "-z", "--find-renames", from.commitHash, to.commitHash]),
+    ]);
+    return { from, to, files: parseNameStatus(names), patch };
   }
 
   async fork(
@@ -154,7 +172,7 @@ export class WorkspaceManager {
       parentCheckpoint: checkpointId,
     };
     await writeJson(target.metadata, metadata);
-    await writeJson(target.checkpoints, []);
+    await writeJson(target.checkpoints, [{ ...checkpoint, workspaceId: targetWorkspaceId }]);
     await writeJson(target.artifacts, []);
     return metadata;
   }
@@ -215,6 +233,7 @@ export class WorkspaceManager {
 async function configureGit(git: GitClient): Promise<void> {
   await git.run(["config", "user.name", "Parallel Runtime"]);
   await git.run(["config", "user.email", "runtime@parallel.local"]);
+  await git.run(["config", "commit.gpgsign", "false"]);
 }
 
 async function runAt(cwd: string, args: string[]): Promise<void> {
@@ -246,3 +265,23 @@ async function writeJson(path: string, value: unknown): Promise<void> {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
+function parseNameStatus(output: string): CheckpointComparison["files"] {
+  const records = output.split("\0").filter(Boolean);
+  const files: CheckpointComparison["files"] = [];
+  for (let index = 0; index < records.length; index += 1) {
+    const status = records[index]!;
+    const path = records[++index];
+    if (!path) break;
+    if (status.startsWith("R")) {
+      const nextPath = records[++index];
+      if (nextPath) files.push({ kind: "renamed", path: nextPath, previousPath: path });
+    } else if (status === "A") {
+      files.push({ kind: "created", path });
+    } else if (status === "D") {
+      files.push({ kind: "deleted", path });
+    } else {
+      files.push({ kind: "modified", path });
+    }
+  }
+  return files;
+}

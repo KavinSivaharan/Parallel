@@ -81,6 +81,41 @@ export class PostgresEventStore implements EventStore {
     }
   }
 
+  async createForkBranch(input: {
+    sessionId: string;
+    branchId: string;
+    branchName: string;
+    parentBranchId: string;
+    parentCheckpointId: string;
+    events: PendingEvent[];
+  }): Promise<AppendResult> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("INSERT INTO event_streams (stream_id) VALUES ($1)", [input.branchId]);
+      await client.query(
+        `INSERT INTO session_branches
+          (id, session_id, name, parent_branch_id, parent_checkpoint_id)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [
+          input.branchId,
+          input.sessionId,
+          input.branchName,
+          input.parentBranchId,
+          input.parentCheckpointId,
+        ],
+      );
+      const result = await appendWithinTransaction(client, input.branchId, 0, input.events);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async appendIdempotent(input: {
     streamId: string;
     expectedVersion: number;

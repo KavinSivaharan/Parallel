@@ -20,6 +20,8 @@
     "@parallel/contracts": "workspace:*",
     "@parallel/domain": "workspace:*",
     "@parallel/provider-sdk": "workspace:*",
+    "@parallel/workspace-provider": "workspace:*",
+    "@parallel/workspace-runtime": "workspace:*",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "pg": "^8.16.3",
