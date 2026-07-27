@@ -1,0 +1,255 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-27T15:59:02.991Z",
+  "providers": [
+    {
+      "metadata": {
+        "id": "claude-code",
+        "displayName": "Claude Code",
+        "adapterVersion": "1.0.0",
+        "providerVersion": null
+      },
+      "capabilities": {
+        "schemaVersion": 1,
+        "startExecution": true,
+        "steering": "continuation",
+        "interactiveInput": false,
+        "pause": "interrupt_current",
+        "resume": "continuation",
+        "cancel": true,
+        "persistentConversation": true,
+        "reconnect": "workspace_only",
+        "checkpointAwareness": "workspace",
+        "shellExecution": true,
+        "filesystemEvents": true,
+        "artifactOutput": true,
+        "toolCallVisibility": "structured",
+        "structuredEventOutput": true,
+        "usageReporting": true,
+        "workspaceOwnership": "parallel",
+        "concurrentExecutions": true
+      },
+      "readiness": {
+        "status": "ready",
+        "checkedAt": "2026-07-27T15:59:02.357Z",
+        "executable": "node",
+        "providerVersion": "claude-code 99.0.0-certification",
+        "authentication": "ready",
+        "diagnostics": [
+          "Provider executable discovered",
+          "Claude authentication configured; upstream expiry is verified on execution"
+        ]
+      },
+      "evidence": {
+        "mode": "deterministic_fixture",
+        "transport": "Claude Code JSONL CLI"
+      },
+      "certification": {
+        "status": "passed",
+        "passed": 11,
+        "failed": 0,
+        "skipped": 9,
+        "report": "claude-code.json"
+      }
+    },
+    {
+      "metadata": {
+        "id": "codex",
+        "displayName": "OpenAI Codex CLI",
+        "adapterVersion": "1.0.0",
+        "providerVersion": null
+      },
+      "capabilities": {
+        "schemaVersion": 1,
+        "startExecution": true,
+        "steering": "continuation",
+        "interactiveInput": false,
+        "pause": "interrupt_current",
+        "resume": "continuation",
+        "cancel": true,
+        "persistentConversation": true,
+        "reconnect": "workspace_only",
+        "checkpointAwareness": "workspace",
+        "shellExecution": true,
+        "filesystemEvents": true,
+        "artifactOutput": true,
+        "toolCallVisibility": "structured",
+        "structuredEventOutput": true,
+        "usageReporting": true,
+        "workspaceOwnership": "parallel",
+        "concurrentExecutions": true
+      },
+      "readiness": {
+        "status": "ready",
+        "checkedAt": "2026-07-27T15:59:02.058Z",
+        "executable": "node",
+        "providerVersion": "codex-cli 99.0.0-test",
+        "authentication": "ready",
+        "diagnostics": [
+          "Codex CLI discovered",
+          "Codex authentication is available",
+          "Trusted local execution boundary; Codex runs with workspace-write access"
+        ]
+      },
+      "evidence": {
+        "mode": "deterministic_fixture",
+        "transport": "Codex JSONL CLI"
+      },
+      "certification": {
+        "status": "passed",
+        "passed": 11,
+        "failed": 0,
+        "skipped": 9,
+        "report": "codex-sdk.json"
+      }
+    },
+    {
+      "metadata": {
+        "id": "devin",
+        "displayName": "Devin",
+        "adapterVersion": "1.0.0",
+        "providerVersion": "API v3"
+      },
+      "capabilities": {
+        "schemaVersion": 1,
+        "startExecution": true,
+        "steering": "interactive",
+        "interactiveInput": true,
+        "pause": "none",
+        "resume": "continuation",
+        "cancel": true,
+        "persistentConversation": true,
+        "reconnect": "cursor_replay",
+        "checkpointAwareness": "none",
+        "shellExecution": true,
+        "filesystemEvents": false,
+        "artifactOutput": false,
+        "toolCallVisibility": "text_only",
+        "structuredEventOutput": true,
+        "usageReporting": false,
+        "workspaceOwnership": "provider",
+        "concurrentExecutions": true
+      },
+      "readiness": {
+        "status": "ready",
+        "checkedAt": "2026-07-27T15:59:02.853Z",
+        "executable": null,
+        "providerVersion": "API v3",
+        "authentication": "ready",
+        "diagnostics": [
+          "Devin v3 service-user authentication verified"
+        ]
+      },
+      "evidence": {
+        "mode": "deterministic_fixture",
+        "transport": "Devin API v3 HTTP"
+      },
+      "certification": {
+        "status": "passed",
+        "passed": 9,
+        "failed": 0,
+        "skipped": 11,
+        "report": "devin.json"
+      }
+    },
+    {
+      "metadata": {
+        "id": "generic-agent",
+        "displayName": "Generic Agent SDK",
+        "adapterVersion": "1.0.0",
+        "providerVersion": "protocol-v1"
+      },
+      "capabilities": {
+        "schemaVersion": 1,
+        "startExecution": true,
+        "steering": "interactive",
+        "interactiveInput": true,
+        "pause": "interrupt_current",
+        "resume": "same_process",
+        "cancel": true,
+        "persistentConversation": true,
+        "reconnect": "cursor_replay",
+        "checkpointAwareness": "native",
+        "shellExecution": true,
+        "filesystemEvents": true,
+        "artifactOutput": true,
+        "toolCallVisibility": "structured",
+        "structuredEventOutput": true,
+        "usageReporting": true,
+        "workspaceOwnership": "shared",
+        "concurrentExecutions": true
+      },
+      "readiness": {
+        "status": "ready",
+        "checkedAt": "2026-07-27T15:59:02.868Z",
+        "executable": null,
+        "providerVersion": "protocol-v1",
+        "authentication": "ready",
+        "diagnostics": [
+          "Deterministic protocol fixture",
+          "Parallel generic protocol v1"
+        ]
+      },
+      "evidence": {
+        "mode": "deterministic_fixture",
+        "transport": "Generic protocol v1 HTTP"
+      },
+      "certification": {
+        "status": "passed",
+        "passed": 11,
+        "failed": 0,
+        "skipped": 9,
+        "report": "generic-agent.json"
+      }
+    },
+    {
+      "metadata": {
+        "id": "openhands",
+        "displayName": "OpenHands",
+        "adapterVersion": "1.0.0",
+        "providerVersion": null
+      },
+      "capabilities": {
+        "schemaVersion": 1,
+        "startExecution": true,
+        "steering": "continuation",
+        "interactiveInput": false,
+        "pause": "interrupt_current",
+        "resume": "continuation",
+        "cancel": true,
+        "persistentConversation": true,
+        "reconnect": "workspace_only",
+        "checkpointAwareness": "workspace",
+        "shellExecution": true,
+        "filesystemEvents": true,
+        "artifactOutput": true,
+        "toolCallVisibility": "structured",
+        "structuredEventOutput": true,
+        "usageReporting": false,
+        "workspaceOwnership": "parallel",
+        "concurrentExecutions": true
+      },
+      "readiness": {
+        "status": "ready",
+        "checkedAt": "2026-07-27T15:59:02.625Z",
+        "executable": "node",
+        "providerVersion": "openhands 99.0.0-certification",
+        "authentication": "unknown",
+        "diagnostics": [
+          "Provider executable discovered"
+        ]
+      },
+      "evidence": {
+        "mode": "deterministic_fixture",
+        "transport": "OpenHands JSONL CLI"
+      },
+      "certification": {
+        "status": "passed",
+        "passed": 11,
+        "failed": 0,
+        "skipped": 9,
+        "report": "openhands.json"
+      }
+    }
+  ]
+}

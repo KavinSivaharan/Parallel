@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "provider": {
+    "id": "devin",
+    "displayName": "Devin",
+    "adapterVersion": "1.0.0",
+    "providerVersion": "API v3"
+  },
+  "capabilities": {
+    "schemaVersion": 1,
+    "startExecution": true,
+    "steering": "interactive",
+    "interactiveInput": true,
+    "pause": "none",
+    "resume": "continuation",
+    "cancel": true,
+    "persistentConversation": true,
+    "reconnect": "cursor_replay",
+    "checkpointAwareness": "none",
+    "shellExecution": true,
+    "filesystemEvents": false,
+    "artifactOutput": false,
+    "toolCallVisibility": "text_only",
+    "structuredEventOutput": true,
+    "usageReporting": false,
+    "workspaceOwnership": "provider",
+    "concurrentExecutions": true
+  },
+  "readiness": {
+    "status": "ready",
+    "checkedAt": "2026-07-27T15:59:02.853Z",
+    "executable": null,
+    "providerVersion": "API v3",
+    "authentication": "ready",
+    "diagnostics": [
+      "Devin v3 service-user authentication verified"
+    ]
+  },
+  "startedAt": "2026-07-27T15:59:02.853Z",
+  "completedAt": "2026-07-27T15:59:02.867Z",
+  "evidence": {
+    "mode": "deterministic_fixture",
+    "transport": "Devin API v3 HTTP"
+  },
+  "checks": [
+    {
+      "id": "capability_honesty",
+      "status": "passed",
+      "durationMs": 0.02,
+      "detail": "Validated"
+    },
+    {
+      "id": "provider_readiness",
+      "status": "passed",
+      "durationMs": 1.65,
+      "detail": "Validated"
+    },
+    {
+      "id": "stable_execution_identity",
+      "status": "passed",
+      "durationMs": 0,
+      "detail": "Validated"
+    },
+    {
+      "id": "execution_startup",
+      "status": "passed",
+      "durationMs": 11.9,
+      "detail": "Validated"
+    },
+    {
+      "id": "steering_delivery",
+      "status": "passed",
+      "durationMs": 0.18,
+      "detail": "Validated"
+    },
+    {
+      "id": "duplicate_command_handling",
+      "status": "passed",
+      "durationMs": 0.07,
+      "detail": "Validated"
+    },
+    {
+      "id": "pause_behavior",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "Provider declares pause unsupported"
+    },
+    {
+      "id": "resume_behavior",
+      "status": "passed",
+      "durationMs": 0.08,
+      "detail": "Validated"
+    },
+    {
+      "id": "checkpoint_behavior",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "Provider declares checkpoint awareness unsupported"
+    },
+    {
+      "id": "workspace_targeting",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "observable_output",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "file_modification",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "successful_completion",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "failed_completion",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "callback_replay",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "malformed_output",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "process_crash",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "timeout",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "cancellation",
+      "status": "passed",
+      "durationMs": 0.08,
+      "detail": "Validated"
+    },
+    {
+      "id": "event_ordering",
+      "status": "passed",
+      "durationMs": 0,
+      "detail": "Validated"
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 0,
+    "skipped": 11
+  }
+}

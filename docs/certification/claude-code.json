@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "provider": {
+    "id": "claude-code",
+    "displayName": "Claude Code",
+    "adapterVersion": "1.0.0",
+    "providerVersion": null
+  },
+  "capabilities": {
+    "schemaVersion": 1,
+    "startExecution": true,
+    "steering": "continuation",
+    "interactiveInput": false,
+    "pause": "interrupt_current",
+    "resume": "continuation",
+    "cancel": true,
+    "persistentConversation": true,
+    "reconnect": "workspace_only",
+    "checkpointAwareness": "workspace",
+    "shellExecution": true,
+    "filesystemEvents": true,
+    "artifactOutput": true,
+    "toolCallVisibility": "structured",
+    "structuredEventOutput": true,
+    "usageReporting": true,
+    "workspaceOwnership": "parallel",
+    "concurrentExecutions": true
+  },
+  "readiness": {
+    "status": "ready",
+    "checkedAt": "2026-07-27T15:59:02.357Z",
+    "executable": "node",
+    "providerVersion": "claude-code 99.0.0-certification",
+    "authentication": "ready",
+    "diagnostics": [
+      "Provider executable discovered",
+      "Claude authentication configured; upstream expiry is verified on execution"
+    ]
+  },
+  "startedAt": "2026-07-27T15:59:02.357Z",
+  "completedAt": "2026-07-27T15:59:02.622Z",
+  "evidence": {
+    "mode": "deterministic_fixture",
+    "transport": "Claude Code JSONL CLI"
+  },
+  "checks": [
+    {
+      "id": "capability_honesty",
+      "status": "passed",
+      "durationMs": 0.27,
+      "detail": "Validated"
+    },
+    {
+      "id": "provider_readiness",
+      "status": "passed",
+      "durationMs": 60.24,
+      "detail": "Validated"
+    },
+    {
+      "id": "stable_execution_identity",
+      "status": "passed",
+      "durationMs": 0.01,
+      "detail": "Validated"
+    },
+    {
+      "id": "execution_startup",
+      "status": "passed",
+      "durationMs": 11.61,
+      "detail": "Validated"
+    },
+    {
+      "id": "steering_delivery",
+      "status": "passed",
+      "durationMs": 0.1,
+      "detail": "Validated"
+    },
+    {
+      "id": "duplicate_command_handling",
+      "status": "passed",
+      "durationMs": 0.01,
+      "detail": "Validated"
+    },
+    {
+      "id": "pause_behavior",
+      "status": "passed",
+      "durationMs": 0.23,
+      "detail": "Validated"
+    },
+    {
+      "id": "resume_behavior",
+      "status": "passed",
+      "durationMs": 0.26,
+      "detail": "Validated"
+    },
+    {
+      "id": "checkpoint_behavior",
+      "status": "passed",
+      "durationMs": 76.55,
+      "detail": "Validated"
+    },
+    {
+      "id": "workspace_targeting",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "observable_output",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "file_modification",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "successful_completion",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "failed_completion",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "callback_replay",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "malformed_output",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "process_crash",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "timeout",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "cancellation",
+      "status": "passed",
+      "durationMs": 0.09,
+      "detail": "Validated"
+    },
+    {
+      "id": "event_ordering",
+      "status": "passed",
+      "durationMs": 0.01,
+      "detail": "Validated"
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 0,
+    "skipped": 9
+  }
+}

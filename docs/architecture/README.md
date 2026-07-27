@@ -7,8 +7,9 @@ flowchart TB
   humans[Humans and enterprise systems] --> edge[HTTP and WebSocket edge]
   edge --> app[Collaboration application layer]
   app --> domain[Event-sourced session domain]
-  app --> adapters[Versioned provider adapter port]
-  adapters --> providers[Codex / simulator / local workspace infrastructure]
+  app --> registry[Provider registry]
+  registry --> adapters[Versioned Provider SDK port]
+  adapters --> providers[Codex / Claude / OpenHands / Devin / Generic]
   providers --> runtime[Replaceable workspace runtime]
   runtime --> processes[Processes / filesystem / Git]
   domain --> pg[(PostgreSQL event store)]
@@ -45,11 +46,16 @@ flowchart TB
 - [ADR 0011: continuation steering](decisions/0011-continuation-steering.md)
 - [ADR 0012: provider process ownership](decisions/0012-provider-process-ownership.md)
 - [ADR 0013: trusted local execution](decisions/0013-trusted-local-agent-execution.md)
+- [ADR 0014: standalone Provider SDK and isolated registry](decisions/0014-provider-sdk-and-registry.md)
 - [Event model](event-model.md)
 - [Database model](database.md)
 - [Provider protocol](provider-protocol.md)
+- [Provider lifecycle](provider-lifecycle.md)
+- [Capability negotiation](capability-negotiation.md)
 - [Real provider architecture](real-provider.md)
 - [Provider certification](provider-certification.md)
 - [Workspace runtime](workspace-runtime.md)
 - [Collaborative execution loop](collaborative-loop.md)
 - [API](../api.md)
+- [Adding a provider](../providers/adding-a-provider.md)
+- [Provider compatibility](../providers/compatibility.md)

@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "provider": {
+    "id": "openhands",
+    "displayName": "OpenHands",
+    "adapterVersion": "1.0.0",
+    "providerVersion": null
+  },
+  "capabilities": {
+    "schemaVersion": 1,
+    "startExecution": true,
+    "steering": "continuation",
+    "interactiveInput": false,
+    "pause": "interrupt_current",
+    "resume": "continuation",
+    "cancel": true,
+    "persistentConversation": true,
+    "reconnect": "workspace_only",
+    "checkpointAwareness": "workspace",
+    "shellExecution": true,
+    "filesystemEvents": true,
+    "artifactOutput": true,
+    "toolCallVisibility": "structured",
+    "structuredEventOutput": true,
+    "usageReporting": false,
+    "workspaceOwnership": "parallel",
+    "concurrentExecutions": true
+  },
+  "readiness": {
+    "status": "ready",
+    "checkedAt": "2026-07-27T15:59:02.625Z",
+    "executable": "node",
+    "providerVersion": "openhands 99.0.0-certification",
+    "authentication": "unknown",
+    "diagnostics": [
+      "Provider executable discovered"
+    ]
+  },
+  "startedAt": "2026-07-27T15:59:02.625Z",
+  "completedAt": "2026-07-27T15:59:02.849Z",
+  "evidence": {
+    "mode": "deterministic_fixture",
+    "transport": "OpenHands JSONL CLI"
+  },
+  "checks": [
+    {
+      "id": "capability_honesty",
+      "status": "passed",
+      "durationMs": 0.02,
+      "detail": "Validated"
+    },
+    {
+      "id": "provider_readiness",
+      "status": "passed",
+      "durationMs": 27.18,
+      "detail": "Validated"
+    },
+    {
+      "id": "stable_execution_identity",
+      "status": "passed",
+      "durationMs": 0,
+      "detail": "Validated"
+    },
+    {
+      "id": "execution_startup",
+      "status": "passed",
+      "durationMs": 11.33,
+      "detail": "Validated"
+    },
+    {
+      "id": "steering_delivery",
+      "status": "passed",
+      "durationMs": 0.01,
+      "detail": "Validated"
+    },
+    {
+      "id": "duplicate_command_handling",
+      "status": "passed",
+      "durationMs": 0.01,
+      "detail": "Validated"
+    },
+    {
+      "id": "pause_behavior",
+      "status": "passed",
+      "durationMs": 0.19,
+      "detail": "Validated"
+    },
+    {
+      "id": "resume_behavior",
+      "status": "passed",
+      "durationMs": 0.19,
+      "detail": "Validated"
+    },
+    {
+      "id": "checkpoint_behavior",
+      "status": "passed",
+      "durationMs": 73.53,
+      "detail": "Validated"
+    },
+    {
+      "id": "workspace_targeting",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "observable_output",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "file_modification",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "successful_completion",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "failed_completion",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "callback_replay",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "malformed_output",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "process_crash",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "timeout",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "cancellation",
+      "status": "passed",
+      "durationMs": 0.04,
+      "detail": "Validated"
+    },
+    {
+      "id": "event_ordering",
+      "status": "passed",
+      "durationMs": 0.01,
+      "detail": "Validated"
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 0,
+    "skipped": 9
+  }
+}

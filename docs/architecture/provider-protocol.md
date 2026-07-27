@@ -29,3 +29,9 @@ Codex declares continuation steering: approved instructions queue while a turn
 runs and are delivered with `exec resume` under the same provider thread ID.
 The `local-workspace` adapter remains runtime infrastructure, not a coding
 agent.
+
+External providers implement generic protocol v1. Parallel validates a strict
+configured manifest against `/.well-known/parallel-agent-provider`, creates an
+idempotent execution, polls cursor-addressed canonical observations, and sends
+versioned lifecycle commands. The boundary is language-neutral and keeps
+proprietary agent code outside the Parallel process.

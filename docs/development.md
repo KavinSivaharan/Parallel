@@ -36,6 +36,36 @@ returns provider credentials. Host user configuration and rule files are
 ignored for reproducibility; standard authentication state remains external to
 the repository and database.
 
+## Claude Code and OpenHands
+
+Install and authenticate Claude Code through `claude auth login`. Parallel uses
+structured stream JSON in non-interactive print mode and continuation against
+the same provider session. `CLAUDE_EXECUTABLE` overrides binary discovery.
+
+Install OpenHands with its supported CLI distribution and configure the model
+credentials OpenHands expects. Parallel invokes headless JSON mode and
+continuation. `OPENHANDS_EXECUTABLE` overrides binary discovery.
+
+Both adapters use the shared supervised CLI runtime: argument-vector spawning,
+process-group cancellation, bounded JSONL normalization, an environment
+allowlist, Parallel-owned workspaces, Git diffs, and artifacts.
+
+## Devin
+
+Create a Devin v3 service user and set `DEVIN_API_KEY` plus `DEVIN_ORG_ID`.
+Sessions require a remote connected repository, supplied per session or through
+`DEVIN_DEFAULT_REPOS`. Devin owns the runtime workspace; Parallel persists
+normalized messages and lifecycle state. Devin v3 does not expose reversible
+pause or checkpoint restore, so those controls remain unsupported.
+
+## Generic Agent SDK
+
+The default `generic-agent` entry probes `GENERIC_AGENT_URL`. Set the optional
+server-side token with `GENERIC_AGENT_TOKEN`. Multiple proprietary providers can
+be installed with `PARALLEL_GENERIC_PROVIDERS`; see
+[adding a provider](providers/adding-a-provider.md). The configured and
+discovered manifests must match before readiness succeeds.
+
 Workspace data defaults to `.parallel/workspaces`. Each branch has stable
 metadata, a repository directory, artifact data, and checkpoint indexes. Set
 `WORKSPACE_ROOT` to relocate it. Removing this directory deletes local execution
@@ -55,8 +85,15 @@ streaming, filesystem observation, two real checkpoints, comparison, restore,
 idempotent fork, inherited replay, artifacts, and emergency process-group
 cancellation.
 
-Normal CI uses a protocol fixture for the Codex adapter and does not require the
-CLI or credentials. Run the complete real-agent collaboration proof using
+Normal CI uses protocol fixtures and does not require provider CLIs or
+credentials. The multi-provider certification suite still exercises the real
+adapter classes through deterministic transports. Regenerate its reports with:
+
+```bash
+pnpm --filter @parallel/provider-certification certify:providers
+```
+
+Run the complete real Codex collaboration proof using
 [the opt-in demo](real-agent-demo.md).
 
 ## Resetting local infrastructure

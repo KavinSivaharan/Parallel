@@ -5,7 +5,8 @@ The control API uses versioned REST commands and catch-up reads; WebSockets deli
 - `POST /v1/auth/development/sign-in`
 - `GET|POST /v1/organizations`
 - `POST /v1/organizations/join`
-- `GET /v1/providers` — validated capabilities, metadata, and sanitized readiness
+- `GET /v1/providers` — validated capabilities, metadata, sanitized readiness,
+  and certification summary
 - `POST /v1/sessions` — create a session and workspace; accepts `title`,
   `objective`, `providerId`, and optional `repositoryUrl` and `baseRef`
 - `GET /v1/organizations/:organizationId/sessions`
@@ -57,6 +58,10 @@ send the same token as `handshake.auth.token`, then subscribe with
 `branch.subscribe`.
 
 The provider catalog never returns credentials. A misconfigured or unavailable
-provider cannot start a session. Capability operations are explicit modes:
-Codex reports `continuation` steering, so approved steering first produces
-`steering.queued` and later `steering.delivered` at a valid turn boundary.
+provider cannot start a session. Certification and readiness are independent:
+certification validates adapter behavior, while readiness reflects the current
+host's executable, endpoint, version, and authentication.
+
+Capability operations are explicit modes. Continuation providers first produce
+`steering.queued` and later `steering.delivered` at a valid turn boundary;
+interactive providers may deliver into the active session.

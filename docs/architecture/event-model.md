@@ -35,7 +35,8 @@ Initial domain events:
   `provider.turn_completed`, `provider.interrupted`
 - `provider.command_queued`, `provider.command_dispatched`,
   `provider.output_received`, `provider.tool_started`,
-  `provider.tool_completed`, `provider.usage_reported`, `provider.warning`,
+  `provider.tool_completed`, `provider.usage_reported`,
+  `provider.cursor_advanced`, `provider.warning`,
   `provider.failed`, `provider.timed_out`, `provider.crashed`
 - `artifact.created`
 
@@ -43,6 +44,12 @@ Provider observations include a monotonic provider sequence and, when available,
 the adapter observation time. Concise provider output remains durable in events;
 large patches and binary bodies live as versioned artifacts with
 content-addressed event references.
+
+Remote cursor advancement is itself immutable. The corresponding
+`provider_executions.provider_cursor` projection lets a replacement adapter
+continue after the last committed upstream batch. Stable upstream event
+identities and the provider inbox absorb a callback replay without duplicating
+canonical timeline facts or creating a sequence gap.
 
 ## Deterministic fork replay
 

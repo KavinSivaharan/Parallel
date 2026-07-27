@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "provider": {
+    "id": "generic-agent",
+    "displayName": "Generic Agent SDK",
+    "adapterVersion": "1.0.0",
+    "providerVersion": "protocol-v1"
+  },
+  "capabilities": {
+    "schemaVersion": 1,
+    "startExecution": true,
+    "steering": "interactive",
+    "interactiveInput": true,
+    "pause": "interrupt_current",
+    "resume": "same_process",
+    "cancel": true,
+    "persistentConversation": true,
+    "reconnect": "cursor_replay",
+    "checkpointAwareness": "native",
+    "shellExecution": true,
+    "filesystemEvents": true,
+    "artifactOutput": true,
+    "toolCallVisibility": "structured",
+    "structuredEventOutput": true,
+    "usageReporting": true,
+    "workspaceOwnership": "shared",
+    "concurrentExecutions": true
+  },
+  "readiness": {
+    "status": "ready",
+    "checkedAt": "2026-07-27T15:59:02.868Z",
+    "executable": null,
+    "providerVersion": "protocol-v1",
+    "authentication": "ready",
+    "diagnostics": [
+      "Deterministic protocol fixture",
+      "Parallel generic protocol v1"
+    ]
+  },
+  "startedAt": "2026-07-27T15:59:02.868Z",
+  "completedAt": "2026-07-27T15:59:02.991Z",
+  "evidence": {
+    "mode": "deterministic_fixture",
+    "transport": "Generic protocol v1 HTTP"
+  },
+  "checks": [
+    {
+      "id": "capability_honesty",
+      "status": "passed",
+      "durationMs": 0.01,
+      "detail": "Validated"
+    },
+    {
+      "id": "provider_readiness",
+      "status": "passed",
+      "durationMs": 0.27,
+      "detail": "Validated"
+    },
+    {
+      "id": "stable_execution_identity",
+      "status": "passed",
+      "durationMs": 0.01,
+      "detail": "Validated"
+    },
+    {
+      "id": "execution_startup",
+      "status": "passed",
+      "durationMs": 10.99,
+      "detail": "Validated"
+    },
+    {
+      "id": "steering_delivery",
+      "status": "passed",
+      "durationMs": 0.23,
+      "detail": "Validated"
+    },
+    {
+      "id": "duplicate_command_handling",
+      "status": "passed",
+      "durationMs": 0.06,
+      "detail": "Validated"
+    },
+    {
+      "id": "pause_behavior",
+      "status": "passed",
+      "durationMs": 0.08,
+      "detail": "Validated"
+    },
+    {
+      "id": "resume_behavior",
+      "status": "passed",
+      "durationMs": 0.05,
+      "detail": "Validated"
+    },
+    {
+      "id": "checkpoint_behavior",
+      "status": "passed",
+      "durationMs": 0.05,
+      "detail": "Validated"
+    },
+    {
+      "id": "workspace_targeting",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "observable_output",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "file_modification",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "successful_completion",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "failed_completion",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "callback_replay",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "malformed_output",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "process_crash",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "timeout",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No adapter-specific probe supplied"
+    },
+    {
+      "id": "cancellation",
+      "status": "passed",
+      "durationMs": 0.05,
+      "detail": "Validated"
+    },
+    {
+      "id": "event_ordering",
+      "status": "passed",
+      "durationMs": 0,
+      "detail": "Validated"
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 0,
+    "skipped": 9
+  }
+}
