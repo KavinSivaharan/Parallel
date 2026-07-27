@@ -25,14 +25,24 @@ Initial domain events:
 - `participant.joined`, `participant.left`
 - `driver.claimed`, `driver.transferred`, `driver.released`
 - `comment.created`
-- `steering.proposed`, `steering.approved`, `steering.rejected`, `steering.dispatched`
+- `steering.proposed`, `steering.approved`, `steering.rejected`,
+  `steering.queued`, `steering.dispatched`, `steering.delivered`,
+  `steering.delivery_failed`
 - `checkpoint.requested`, `checkpoint.created`, `checkpoint.restore_requested`, `checkpoint.restored`
 - `session.forked`
-- `provider.execution_started`, `provider.output_observed`, `provider.tool_started`, `provider.tool_completed`, `provider.interrupted`
-- `provider.command_queued`, `provider.command_dispatched`, `provider.output_received`, `provider.failed`
+- `provider.execution_starting`, `provider.execution_started`,
+  `provider.execution_completed`, `provider.turn_started`,
+  `provider.turn_completed`, `provider.interrupted`
+- `provider.command_queued`, `provider.command_dispatched`,
+  `provider.output_received`, `provider.tool_started`,
+  `provider.tool_completed`, `provider.usage_reported`, `provider.warning`,
+  `provider.failed`, `provider.timed_out`, `provider.crashed`
 - `artifact.created`
 
-Provider output can be high volume. It remains durable, but large binary bodies live in object storage and events contain content-addressed references.
+Provider observations include a monotonic provider sequence and, when available,
+the adapter observation time. Concise provider output remains durable in events;
+large patches and binary bodies live as versioned artifacts with
+content-addressed event references.
 
 ## Deterministic fork replay
 

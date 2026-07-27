@@ -7,8 +7,8 @@ flowchart TB
   humans[Humans and enterprise systems] --> edge[HTTP and WebSocket edge]
   edge --> app[Collaboration application layer]
   app --> domain[Event-sourced session domain]
-  app --> adapters[Provider adapter port]
-  adapters --> providers[Claude Code / Codex / Devin / local workspace]
+  app --> adapters[Versioned provider adapter port]
+  adapters --> providers[Codex / simulator / local workspace infrastructure]
   providers --> runtime[Replaceable workspace runtime]
   runtime --> processes[Processes / filesystem / Git]
   domain --> pg[(PostgreSQL event store)]
@@ -40,9 +40,16 @@ flowchart TB
 - [ADR 0006: workspace execution backend](decisions/0006-workspace-execution-backend.md)
 - [ADR 0007: commit checkpoints and reference forks](decisions/0007-commit-checkpoints-and-reference-forks.md)
 - [ADR 0008: command concurrency during provider streaming](decisions/0008-command-concurrency-during-streaming.md)
+- [ADR 0009: Codex as the first real provider](decisions/0009-first-real-provider-codex.md)
+- [ADR 0010: versioned provider capabilities](decisions/0010-versioned-provider-capabilities.md)
+- [ADR 0011: continuation steering](decisions/0011-continuation-steering.md)
+- [ADR 0012: provider process ownership](decisions/0012-provider-process-ownership.md)
+- [ADR 0013: trusted local execution](decisions/0013-trusted-local-agent-execution.md)
 - [Event model](event-model.md)
 - [Database model](database.md)
 - [Provider protocol](provider-protocol.md)
+- [Real provider architecture](real-provider.md)
+- [Provider certification](provider-certification.md)
 - [Workspace runtime](workspace-runtime.md)
 - [Collaborative execution loop](collaborative-loop.md)
 - [API](../api.md)

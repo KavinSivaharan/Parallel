@@ -5,7 +5,9 @@ The control API uses versioned REST commands and catch-up reads; WebSockets deli
 - `POST /v1/auth/development/sign-in`
 - `GET|POST /v1/organizations`
 - `POST /v1/organizations/join`
-- `POST /v1/sessions` — create a session and workspace; accepts optional `repositoryUrl` and `baseRef`
+- `GET /v1/providers` — validated capabilities, metadata, and sanitized readiness
+- `POST /v1/sessions` — create a session and workspace; accepts `title`,
+  `objective`, `providerId`, and optional `repositoryUrl` and `baseRef`
 - `GET /v1/organizations/:organizationId/sessions`
 - `GET /v1/branches/:branchId/state`
 - `GET /v1/branches/:branchId/events?after=<sequence>`
@@ -15,7 +17,8 @@ The control API uses versioned REST commands and catch-up reads; WebSockets deli
 - `GET|POST /v1/branches/:branchId/checkpoints`
 - `GET /v1/branches/:branchId/checkpoints/compare?from=<id>&to=<id>`
 - `POST /v1/branches/:branchId/checkpoints/:checkpointId/restore`
-- `POST /v1/branches/:branchId/checkpoints/:checkpointId/forks`
+- `POST /v1/branches/:branchId/checkpoints/:checkpointId/forks` — accepts an
+  optional independent fork `objective`
 - `GET /v1/branches/:branchId/artifacts`
 - `GET /v1/artifacts/:artifactId/content`
 - `GET /v1/branches/:branchId/replay`
@@ -52,3 +55,8 @@ steering, provider observations, and artifact IDs.
 Authenticated routes require `Authorization: Bearer <token>`. WebSocket clients
 send the same token as `handshake.auth.token`, then subscribe with
 `branch.subscribe`.
+
+The provider catalog never returns credentials. A misconfigured or unavailable
+provider cannot start a session. Capability operations are explicit modes:
+Codex reports `continuation` steering, so approved steering first produces
+`steering.queued` and later `steering.delivered` at a valid turn boundary.

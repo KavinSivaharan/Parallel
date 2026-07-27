@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "provider": {
+    "id": "simulator",
+    "displayName": "Deterministic Simulator",
+    "adapterVersion": "1.0.0",
+    "providerVersion": "1.0.0"
+  },
+  "capabilities": {
+    "schemaVersion": 1,
+    "startExecution": true,
+    "steering": "interactive",
+    "interactiveInput": true,
+    "pause": "interrupt_current",
+    "resume": "same_process",
+    "cancel": true,
+    "persistentConversation": true,
+    "reconnect": "none",
+    "checkpointAwareness": "none",
+    "shellExecution": false,
+    "filesystemEvents": false,
+    "artifactOutput": true,
+    "toolCallVisibility": "structured",
+    "structuredEventOutput": true,
+    "usageReporting": false,
+    "workspaceOwnership": "parallel",
+    "concurrentExecutions": true
+  },
+  "readiness": {
+    "status": "ready",
+    "checkedAt": "2026-07-27T14:49:03.992Z",
+    "executable": null,
+    "providerVersion": "1.0.0",
+    "authentication": "ready",
+    "diagnostics": [
+      "Deterministic in-process provider"
+    ]
+  },
+  "startedAt": "2026-07-27T14:49:03.991Z",
+  "completedAt": "2026-07-27T14:49:04.004Z",
+  "checks": [
+    {
+      "id": "capability_honesty",
+      "status": "passed",
+      "durationMs": 0.03,
+      "detail": "Validated"
+    },
+    {
+      "id": "provider_readiness",
+      "status": "passed",
+      "durationMs": 0.58,
+      "detail": "Validated"
+    },
+    {
+      "id": "stable_execution_identity",
+      "status": "passed",
+      "durationMs": 0.01,
+      "detail": "Validated"
+    },
+    {
+      "id": "execution_startup",
+      "status": "passed",
+      "durationMs": 11.18,
+      "detail": "Validated"
+    },
+    {
+      "id": "steering_delivery",
+      "status": "passed",
+      "durationMs": 0.06,
+      "detail": "Validated"
+    },
+    {
+      "id": "duplicate_command_handling",
+      "status": "passed",
+      "durationMs": 0.03,
+      "detail": "Validated"
+    },
+    {
+      "id": "pause_behavior",
+      "status": "passed",
+      "durationMs": 0.02,
+      "detail": "Validated"
+    },
+    {
+      "id": "lifecycle_transitions",
+      "status": "passed",
+      "durationMs": 0.01,
+      "detail": "Validated"
+    },
+    {
+      "id": "checkpoint_behavior",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "Provider declares checkpoint awareness unsupported"
+    },
+    {
+      "id": "workspace_targeting",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No certification probe supplied"
+    },
+    {
+      "id": "stdout_and_stderr",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No certification probe supplied"
+    },
+    {
+      "id": "file_modification",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No certification probe supplied"
+    },
+    {
+      "id": "successful_completion",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No certification probe supplied"
+    },
+    {
+      "id": "failed_completion",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No certification probe supplied"
+    },
+    {
+      "id": "callback_replay",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No certification probe supplied"
+    },
+    {
+      "id": "malformed_output",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No certification probe supplied"
+    },
+    {
+      "id": "process_crash",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No certification probe supplied"
+    },
+    {
+      "id": "timeout",
+      "status": "skipped",
+      "durationMs": 0,
+      "detail": "No certification probe supplied"
+    },
+    {
+      "id": "cancellation",
+      "status": "passed",
+      "durationMs": 0.01,
+      "detail": "Validated"
+    },
+    {
+      "id": "event_ordering",
+      "status": "passed",
+      "durationMs": 0.02,
+      "detail": "Validated"
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "skipped": 10
+  }
+}

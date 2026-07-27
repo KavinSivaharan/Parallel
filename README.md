@@ -2,12 +2,13 @@
 
 Parallel is the collaboration layer for autonomous coding agents: one live execution, shared by many humans, without replacing the underlying agent.
 
-The current integrated slice runs real commands in an isolated local workspace.
-Multiple authenticated organization members share one execution, with atomic
-driver control, live stdout/stderr, filesystem changes, Git diffs, real
-commit-backed checkpoints, restore, forks, versioned artifacts, emergency
-interruption, and deterministic replay. A simulator remains available as a
-contract test for future agent adapters.
+The current integrated slice runs a real Codex coding-agent session in a
+Parallel-owned Git workspace. Multiple authenticated organization members share
+one execution, with atomic driver control, approved continuation steering,
+structured tool activity, filesystem changes, Git diffs, usage, commit-backed
+checkpoints, independent forks, versioned artifacts, emergency interruption,
+and deterministic replay. A simulator remains available for deterministic
+adapter and collaboration tests.
 
 ## Product boundary
 
@@ -22,7 +23,9 @@ apps/api              NestJS control plane and realtime gateway
 apps/web              Next.js execution workspace
 packages/contracts    versioned wire and event schemas
 packages/domain       event-sourced collaboration domain
-packages/provider-sdk provider adapter contract and simulator
+packages/provider-sdk versioned provider contract and simulator
+packages/provider-certification reusable behavioral adapter certification
+packages/codex-provider real Codex CLI adapter
 packages/workspace-runtime real process, filesystem, Git, checkpoint, and artifact runtime
 packages/workspace-provider provider adapter backed by the workspace runtime
 docs                  architecture, API, database, and event documentation
@@ -42,9 +45,10 @@ pnpm dev
 ```
 
 The web app runs on `http://localhost:3000`; the API runs on `http://localhost:4000`.
-New sessions use the real local-workspace provider by default. Leave the
-repository URL blank to initialize an empty Git repository, or provide a clone
-URL and optional base ref.
+The provider picker reports live readiness. Codex uses the host's standard
+login and never sends credentials to the browser or event log. Leave the
+repository URL blank to initialize an empty Git repository, or provide a local
+or remote clone URL and optional base ref.
 
 ## Quality gates
 
@@ -56,13 +60,13 @@ pnpm build
 
 See [developer setup](docs/development.md), [API documentation](docs/api.md),
 [architecture](docs/architecture/README.md), and the
-[Milestone 3 engineering report](docs/milestone-3.md).
+[real-agent demo](docs/real-agent-demo.md).
 
 Development sign-in is intentionally local-only and is disabled when
 `NODE_ENV=production`. It exercises the same bearer-token and organization
 authorization boundary that a production OIDC verifier will implement.
 
-The local workspace backend is an isolation boundary for state, not a security
-sandbox. It is appropriate for trusted development and CI. Untrusted production
-execution requires the replaceable container or microVM backend described in
-[ADR 0006](docs/architecture/decisions/0006-workspace-execution-backend.md).
+The local workspace and Codex process boundary is not a security sandbox. It is
+appropriate only for trusted development repositories and users. Untrusted
+production execution requires the replaceable container or microVM backend
+described in [ADR 0013](docs/architecture/decisions/0013-trusted-local-agent-execution.md).

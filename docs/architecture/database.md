@@ -17,7 +17,7 @@ erDiagram
 
 Core tables:
 
-- `sessions`: tenant boundary, lifecycle metadata, owning organization.
+- `sessions`: tenant boundary, title, coding objective, provider, and owning organization.
 - `event_streams`: gap-free optimistic stream head.
 - `session_branches`: provider binding plus parent branch and checkpoint reference.
 - `events`: append-only envelope, unique `(stream_id, sequence)`.
@@ -28,7 +28,10 @@ Core tables:
   development content, and creating event.
 - `idempotency_keys`: command response replay and conflict protection.
 - `users`, `organizations`, `organization_memberships`: internal identity and authorization boundary.
-- `provider_executions`, `provider_observation_inbox`: provider lifecycle, cursor, ordering, and deduplication.
+- `provider_executions`: provider and conversation identity, owning API instance,
+  process ID, lifecycle, observation cursor, timestamps, persistence latency,
+  failure classification, and metrics.
+- `provider_observation_inbox`: provider observation ordering and deduplication.
 - `consumer_inbox`: durable consumer idempotency.
 The event log is authoritative. Workspace, checkpoint, provider execution, and
 artifact rows are rebuildable projections or durable content indexes. Artifact

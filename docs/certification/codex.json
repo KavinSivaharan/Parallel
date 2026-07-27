@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "provider": {
+    "id": "codex",
+    "displayName": "OpenAI Codex CLI",
+    "adapterVersion": "1.0.0",
+    "providerVersion": "codex-cli 0.146.0-alpha.3.1"
+  },
+  "capabilities": {
+    "schemaVersion": 1,
+    "startExecution": true,
+    "steering": "continuation",
+    "interactiveInput": false,
+    "pause": "interrupt_current",
+    "resume": "continuation",
+    "cancel": true,
+    "persistentConversation": true,
+    "reconnect": "workspace_only",
+    "checkpointAwareness": "workspace",
+    "shellExecution": true,
+    "filesystemEvents": true,
+    "artifactOutput": true,
+    "toolCallVisibility": "structured",
+    "structuredEventOutput": true,
+    "usageReporting": true,
+    "workspaceOwnership": "parallel",
+    "concurrentExecutions": true
+  },
+  "readiness": {
+    "status": "ready",
+    "authentication": "ready",
+    "credentialMaterialPersisted": false
+  },
+  "evidence": {
+    "realRun": "../../reports/real-agent-demo.latest.json",
+    "protocolTests": "../../packages/codex-provider/src/provider.test.ts",
+    "securityTests": "../../packages/codex-provider/src/security.test.ts"
+  },
+  "checks": [
+    { "id": "capability_honesty", "status": "passed", "evidence": "validated SDK schema" },
+    { "id": "provider_readiness", "status": "passed", "evidence": "real provider run" },
+    { "id": "stable_execution_identity", "status": "passed", "evidence": "real parent run used one logical provider ID" },
+    { "id": "workspace_targeting", "status": "passed", "evidence": "real isolated ledger workspace" },
+    { "id": "tool_output", "status": "passed", "evidence": "structured real shell tools and results" },
+    { "id": "file_modification", "status": "passed", "evidence": "real allocation, service, tests, and README changes" },
+    { "id": "successful_completion", "status": "passed", "evidence": "three parent turns and one fork turn" },
+    { "id": "failed_completion", "status": "passed", "evidence": "protocol crash classification test" },
+    { "id": "cancellation", "status": "passed", "evidence": "real emergency interruption in 272 ms" },
+    { "id": "duplicate_command_handling", "status": "passed", "evidence": "protocol steering idempotency test" },
+    { "id": "steering_delivery", "status": "passed", "evidence": "approved real continuation in same Codex thread" },
+    { "id": "steering_state_matrix", "status": "passed", "evidence": "before start, active turn, idle boundary, duplicate, and cancelled tests" },
+    { "id": "event_ordering", "status": "passed", "evidence": "128 contiguous real parent events" },
+    { "id": "callback_replay", "status": "passed", "evidence": "duplicate structured item test" },
+    { "id": "malformed_output", "status": "passed", "evidence": "protocol malformed JSONL test" },
+    { "id": "process_crash", "status": "passed", "evidence": "protocol non-zero exit and API restart tests" },
+    { "id": "timeout", "status": "passed", "evidence": "process-group timeout test" },
+    { "id": "checkpoint_and_fork", "status": "passed", "evidence": "real Git commit and isolated real-agent fork" },
+    { "id": "secret_redaction", "status": "passed", "evidence": "authorization, token, password, and key tests" }
+  ],
+  "summary": {
+    "passed": 19,
+    "failed": 0,
+    "skipped": 0
+  },
+  "limitations": [
+    "Codex exposes aggregated command output, not a reliable stdout/stderr split.",
+    "Steering is continuation delivery, not active-turn injection.",
+    "A vanished active process cannot be reattached after an API-host crash.",
+    "Local execution is trusted-development only and is not a sandbox."
+  ]
+}
