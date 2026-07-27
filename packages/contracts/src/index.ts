@@ -50,6 +50,7 @@ export const eventTypeSchema = z.enum([
   "provider.execution_started",
   "provider.execution_starting",
   "provider.execution_completed",
+  "provider.cursor_advanced",
   "provider.turn_started",
   "provider.turn_completed",
   "provider.output_observed",

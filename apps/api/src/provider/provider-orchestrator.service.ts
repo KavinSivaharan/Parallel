@@ -6,15 +6,11 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from "@nestjs/common";
-import { CodexProvider, type CodexProviderOptions } from "@parallel/codex-provider";
 import type { Actor, EventEnvelope, PendingEvent } from "@parallel/contracts";
 import {
-  SimulatedProvider,
-  type AgentProvider,
   type ProviderExecution,
   type ProviderObservation,
 } from "@parallel/provider-sdk";
-import { LocalWorkspaceProvider } from "@parallel/workspace-provider";
 import { WorkspaceManager } from "@parallel/workspace-runtime";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
@@ -23,13 +19,14 @@ import type { Pool } from "pg";
 import { ulid } from "ulid";
 import { PG_POOL } from "../persistence/database.constants.js";
 import { PostgresEventStore } from "../persistence/postgres-event-store.js";
+import { ProviderRegistry } from "./provider-registry.js";
 
 const execFileAsync = promisify(execFile);
 
 @Injectable()
 export class ProviderOrchestratorService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ProviderOrchestratorService.name);
-  private readonly providers: Map<string, AgentProvider>;
+  private readonly providers: ProviderRegistry;
   private readonly executions = new Map<string, ProviderExecution>();
   private healthy = true;
   private readonly instanceId = ulid();
@@ -41,14 +38,7 @@ export class ProviderOrchestratorService implements OnModuleInit, OnModuleDestro
     @Inject(WorkspaceManager)
     workspaces: WorkspaceManager,
   ) {
-    this.providers = new Map<string, AgentProvider>([
-      ["simulator", new SimulatedProvider()],
-      ["local-workspace", new LocalWorkspaceProvider(workspaces)],
-      [
-        "codex",
-        new CodexProvider(workspaces, codexProviderOptions()),
-      ],
-    ]);
+    this.providers = new ProviderRegistry(workspaces);
   }
 
   async onModuleInit(): Promise<void> {
@@ -87,7 +77,9 @@ export class ProviderOrchestratorService implements OnModuleInit, OnModuleDestro
               "The API restarted while the provider process was active; the execution was marked interrupted.",
             providerExecutionId: execution.provider_execution_id,
             processTerminated,
-            recoverableConversation: execution.provider_id === "codex",
+            recoverableConversation:
+              this.providers.get(execution.provider_id)?.capabilities
+                .persistentConversation ?? false,
           },
         }]);
       }
@@ -104,10 +96,11 @@ export class ProviderOrchestratorService implements OnModuleInit, OnModuleDestro
 
   async providerCatalog() {
     return Promise.all(
-      [...this.providers.values()].map(async (provider) => ({
+      this.providers.values().map(async ({ provider, certification }) => ({
         metadata: provider.metadata,
         capabilities: provider.capabilities,
         readiness: await provider.readiness(),
+        certification,
       })),
     );
   }
@@ -314,7 +307,10 @@ export class ProviderOrchestratorService implements OnModuleInit, OnModuleDestro
     providerExecutionId: string,
     observation: ProviderObservation,
   ): Promise<void> {
-    if (await this.wasProviderObservationProcessed(providerExecutionId, observation.id)) return;
+    const alreadyProcessed = await this.wasProviderObservationProcessed(
+      providerExecutionId,
+      observation.id,
+    );
     const current = await this.pool.query<{ last_provider_sequence: string }>(
       "SELECT last_provider_sequence FROM provider_executions WHERE branch_id = $1",
       [branchId],
@@ -330,6 +326,15 @@ export class ProviderOrchestratorService implements OnModuleInit, OnModuleDestro
     }
     if (observation.sequence !== last + 1) {
       throw new Error(`Provider observation gap: expected ${last + 1}, got ${observation.sequence}`);
+    }
+    if (alreadyProcessed) {
+      await this.pool.query(
+        `UPDATE provider_executions
+         SET last_provider_sequence = $2, last_observed_at = $3, updated_at = now()
+         WHERE branch_id = $1`,
+        [branchId, observation.sequence, validObservedAt(observation.observedAt)],
+      );
+      return;
     }
 
     const actor: Actor = { kind: "provider", id: providerExecutionId };
@@ -389,6 +394,7 @@ export class ProviderOrchestratorService implements OnModuleInit, OnModuleDestro
            last_observed_at = $8,
            last_persistence_latency_ms = $9,
            last_error_code = COALESCE($10, last_error_code),
+           provider_cursor = COALESCE($11, provider_cursor),
            updated_at = now()
        WHERE branch_id = $1`,
       [
@@ -402,6 +408,7 @@ export class ProviderOrchestratorService implements OnModuleInit, OnModuleDestro
         observedAt,
         persistenceLatencyMs,
         observation.kind === "error" ? observation.code : null,
+        observation.kind === "cursor" ? observation.cursor : null,
       ],
     );
     await this.markProviderObservationProcessed(
@@ -440,9 +447,10 @@ export class ProviderOrchestratorService implements OnModuleInit, OnModuleDestro
     const saved = await this.pool.query<{
       last_provider_sequence: string;
       provider_session_id: string | null;
+      provider_cursor: string | null;
       state: string;
     }>(
-      `SELECT last_provider_sequence, provider_session_id, state
+      `SELECT last_provider_sequence, provider_session_id, provider_cursor, state
        FROM provider_executions WHERE branch_id = $1`,
       [branchId],
     );
@@ -456,6 +464,9 @@ export class ProviderOrchestratorService implements OnModuleInit, OnModuleDestro
       recovery: {
         ...(saved.rows[0]?.provider_session_id
           ? { providerSessionId: saved.rows[0].provider_session_id }
+          : {}),
+        ...(saved.rows[0]?.provider_cursor
+          ? { cursor: saved.rows[0].provider_cursor }
           : {}),
         state:
           saved.rows[0]?.state === "paused"
@@ -832,6 +843,16 @@ function observationEvents(observation: ProviderObservation, actor: Actor): Pend
           providerSequence: observation.sequence,
         },
       }];
+    case "cursor":
+      return [{
+        ...base,
+        type: "provider.cursor_advanced",
+        payload: {
+          cursor: observation.cursor,
+          providerSequence: observation.sequence,
+          ...observationTiming(observation),
+        },
+      }];
     case "warning":
       return [{
         ...base,
@@ -932,28 +953,6 @@ function toEventEnvelope(row: EventRow): EventEnvelope {
   };
 }
 
-function numericEnvironment(name: string): number | undefined {
-  const raw = process.env[name];
-  if (!raw) return undefined;
-  const value = Number(raw);
-  if (!Number.isFinite(value)) throw new Error(`${name} must be numeric`);
-  return value;
-}
-
-function codexProviderOptions(): CodexProviderOptions {
-  const maxExecutionMs = numericEnvironment("CODEX_MAX_EXECUTION_MS");
-  const maxOutputBytes = numericEnvironment("CODEX_MAX_OUTPUT_BYTES");
-  const maxArtifactBytes = numericEnvironment("CODEX_MAX_ARTIFACT_BYTES");
-  return {
-    ...(process.env.CODEX_EXECUTABLE
-      ? { executable: process.env.CODEX_EXECUTABLE }
-      : {}),
-    ...(maxExecutionMs !== undefined ? { maxExecutionMs } : {}),
-    ...(maxOutputBytes !== undefined ? { maxOutputBytes } : {}),
-    ...(maxArtifactBytes !== undefined ? { maxArtifactBytes } : {}),
-  };
-}
-
 function validObservedAt(value: string | undefined): Date {
   const parsed = value ? new Date(value) : new Date();
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
@@ -975,7 +974,8 @@ async function terminateAbandonedProviderProcess(
       timeout: 2_000,
     });
     const command = String(stdout).trim();
-    if (!command || !command.toLowerCase().includes(providerId.toLowerCase())) return false;
+    const providerProcessMarker = providerId.toLowerCase().split("-")[0] ?? providerId;
+    if (!command || !command.toLowerCase().includes(providerProcessMarker)) return false;
     process.kill(process.platform === "win32" ? pid : -pid, "SIGTERM");
     return true;
   } catch {

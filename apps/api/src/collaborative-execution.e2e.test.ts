@@ -55,6 +55,7 @@ describe("collaborative execution vertical slice", () => {
         metadata: { id: string };
         readiness: { status: string };
         capabilities: { schemaVersion: number; steering: string };
+        certification: { status: string; failed: number };
       }>
     >("/v1/providers", alice.token);
     expect(providers).toEqual(
@@ -68,6 +69,15 @@ describe("collaborative execution vertical slice", () => {
           metadata: expect.objectContaining({ id: "codex" }),
           capabilities: expect.objectContaining({ steering: "continuation" }),
         }),
+        ...["claude-code", "openhands", "devin", "generic-agent"].map((id) =>
+          expect.objectContaining({
+            metadata: expect.objectContaining({ id }),
+            certification: expect.objectContaining({
+              status: "passed",
+              failed: 0,
+            }),
+          }),
+        ),
       ]),
     );
     await json("/v1/organizations/join", bob.token, {

@@ -59,6 +59,7 @@ interface ProviderCatalogItem {
   capabilities: {
     schemaVersion: 1;
     steering: "interactive" | "continuation" | "none";
+    interactiveInput: boolean;
     pause: "interrupt_current" | "boundary_only" | "none";
     resume: "same_process" | "continuation" | "new_execution" | "none";
     cancel: boolean;
@@ -69,6 +70,7 @@ interface ProviderCatalogItem {
     filesystemEvents: boolean;
     artifactOutput: boolean;
     toolCallVisibility: "structured" | "text_only" | "none";
+    structuredEventOutput: boolean;
     usageReporting: boolean;
   };
   readiness: {
@@ -76,6 +78,15 @@ interface ProviderCatalogItem {
     authentication: "ready" | "missing" | "unknown";
     providerVersion: string | null;
     diagnostics: string[];
+  };
+  certification: {
+    schemaVersion: 1;
+    status: "passed" | "failed" | "not_run";
+    passed: number;
+    failed: number;
+    skipped: number;
+    report: string | null;
+    certifiedAt: string | null;
   };
 }
 
@@ -456,6 +467,9 @@ export function ExecutionWorkspace() {
   );
   const executionState = latestProviderState(events);
   const usage = aggregateUsage(events);
+  const executionControlSupported = state.status === "paused"
+    ? selectedProvider?.capabilities.resume !== "none"
+    : selectedProvider?.capabilities.pause !== "none";
 
   return (
     <main className="shell">
@@ -498,7 +512,14 @@ export function ExecutionWorkspace() {
             </button>
           )}
           <button
-            disabled={busy || !canCollaborate}
+            disabled={busy || !canCollaborate || !executionControlSupported}
+            title={
+              executionControlSupported
+                ? undefined
+                : `${selectedProvider?.metadata.displayName ?? "Provider"} does not support ${
+                    state.status === "paused" ? "resume" : "pause"
+                  }`
+            }
             className={`control ${state.status === "paused" ? "resume" : "danger"}`}
             onClick={() => command(state.status === "paused" ? "session.resume" : "session.pause", state.status === "paused" ? {} : { reason: "Emergency pause from workspace" })}
           >
@@ -772,21 +793,30 @@ function ProviderPanel({
 }) {
   const capabilityRows = [
     ["Steering", provider.capabilities.steering],
+    ["Interactive input", provider.capabilities.interactiveInput ? "yes" : "no"],
     ["Pause", provider.capabilities.pause],
     ["Resume", provider.capabilities.resume],
+    ["Cancellation", provider.capabilities.cancel ? "yes" : "no"],
     ["Reconnect", provider.capabilities.reconnect],
     ["Checkpoints", provider.capabilities.checkpointAwareness],
+    ["Persistent conversation", provider.capabilities.persistentConversation ? "yes" : "no"],
     ["Tool visibility", provider.capabilities.toolCallVisibility],
+    ["Structured events", provider.capabilities.structuredEventOutput ? "yes" : "no"],
+    ["Usage reporting", provider.capabilities.usageReporting ? "yes" : "no"],
   ];
   return (
     <section className="provider-panel">
       <div className="context-heading">
         <h2>Agent provider</h2>
-        <span className={provider.readiness.status === "ready" ? "healthy" : "badge"}>
-          {provider.readiness.status}
+        <span className={provider.certification.status === "passed" ? "healthy" : "badge"}>
+          {provider.certification.status === "passed" ? "certified" : provider.certification.status}
         </span>
       </div>
       <strong className="provider-name">{provider.metadata.displayName}</strong>
+      <p className="provider-objective">
+        Adapter {provider.metadata.adapterVersion} · Provider{" "}
+        {provider.readiness.providerVersion ?? provider.metadata.providerVersion ?? "unknown"}
+      </p>
       <p className="provider-objective">{objective}</p>
       <dl className="capability-list">
         {capabilityRows.map(([label, value]) => (
@@ -795,7 +825,7 @@ function ProviderPanel({
       </dl>
       {provider.capabilities.steering === "continuation" && (
         <p className="provider-boundary">
-          Approved steering is pending while a turn runs, then reaches the same Codex thread through continuation.
+          Approved steering is pending while a turn runs, then reaches the same provider conversation through continuation.
         </p>
       )}
       {provider.capabilities.usageReporting && (
@@ -956,9 +986,7 @@ function SessionPicker({
                 ))}
               </select>
               <small>
-                {providers.find((item) => item.metadata.id === providerId)?.capabilities.steering === "continuation"
-                  ? "Steering queues until the next provider turn."
-                  : "Capabilities are enforced by the adapter."}
+                {providerSummary(providers.find((item) => item.metadata.id === providerId))}
               </small>
             </div>
             <div className="session-field">
@@ -976,9 +1004,17 @@ function SessionPicker({
                 <span className="provider-state-dot" />
                 <div>
                   <strong>{provider.metadata.displayName}</strong>
-                  <small>{provider.readiness.status} · auth {provider.readiness.authentication}</small>
+                  <small>
+                    {provider.readiness.status} ·{" "}
+                    {provider.readiness.providerVersion ?? provider.metadata.providerVersion ?? "version unavailable"}
+                    {" · "}adapter {provider.metadata.adapterVersion}
+                  </small>
                 </div>
-                <em>{provider.capabilities.steering} steering</em>
+                <em>
+                  {provider.certification.status === "passed" ? "certified" : provider.certification.status}
+                  {" · "}
+                  {provider.capabilities.steering} steering
+                </em>
               </article>
             ))}
           </div>
@@ -990,6 +1026,20 @@ function SessionPicker({
       </div>
     </main>
   );
+}
+
+function providerSummary(provider: ProviderCatalogItem | undefined): string {
+  if (!provider) return "Provider capabilities are unavailable.";
+  const version =
+    provider.readiness.providerVersion ??
+    provider.metadata.providerVersion ??
+    "version unavailable";
+  return [
+    version,
+    `${provider.capabilities.steering} steering`,
+    `${provider.capabilities.pause} pause`,
+    provider.certification.status === "passed" ? "certified" : "not certified",
+  ].join(" · ");
 }
 
 function Composer({ isDriver, steeringSupported, steeringModel, disabled, onSubmit, onComment }: {
