@@ -1,5 +1,5 @@
 {
-  "name": "@parallel/provider-certification",
+  "name": "@parallel/cli-provider-runtime",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -15,18 +15,12 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "certify:providers": "PARALLEL_WRITE_CERTIFICATION=1 vitest run src/providers.test.ts",
+    "test": "vitest run --passWithNoTests",
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@parallel/claude-code-provider": "workspace:*",
-    "@parallel/codex-provider": "workspace:*",
-    "@parallel/devin-provider": "workspace:*",
-    "@parallel/generic-agent-provider": "workspace:*",
-    "@parallel/openhands-provider": "workspace:*",
-    "@parallel/workspace-runtime": "workspace:*",
-    "@parallel/provider-sdk": "workspace:*"
+    "@parallel/provider-sdk": "workspace:*",
+    "@parallel/workspace-runtime": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

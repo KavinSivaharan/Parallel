@@ -1,50 +1,22 @@
 import { z } from "zod";
+import {
+  providerCapabilitiesV1Schema,
+  type ProviderCapabilities,
+  type ProviderCapabilitiesV1,
+  type ProviderMetadata,
+  type ProviderReadiness,
+} from "./schemas.js";
 
-export const PROVIDER_CAPABILITY_SCHEMA_VERSION = 1 as const;
-
-export const providerCapabilitiesV1Schema = z.object({
-  schemaVersion: z.literal(PROVIDER_CAPABILITY_SCHEMA_VERSION),
-  startExecution: z.boolean(),
-  steering: z.enum(["interactive", "continuation", "none"]),
-  interactiveInput: z.boolean(),
-  pause: z.enum(["interrupt_current", "boundary_only", "none"]),
-  resume: z.enum(["same_process", "continuation", "new_execution", "none"]),
-  cancel: z.boolean(),
-  persistentConversation: z.boolean(),
-  reconnect: z.enum(["reattach", "cursor_replay", "workspace_only", "none"]),
-  checkpointAwareness: z.enum(["native", "workspace", "none"]),
-  shellExecution: z.boolean(),
-  filesystemEvents: z.boolean(),
-  artifactOutput: z.boolean(),
-  toolCallVisibility: z.enum(["structured", "text_only", "none"]),
-  structuredEventOutput: z.boolean(),
-  usageReporting: z.boolean(),
-  workspaceOwnership: z.enum(["parallel", "provider", "shared"]),
-  concurrentExecutions: z.boolean(),
-}).strict();
-
-export type ProviderCapabilitiesV1 = z.infer<typeof providerCapabilitiesV1Schema>;
-export type ProviderCapabilities = ProviderCapabilitiesV1;
-
-export const providerMetadataSchema = z.object({
-  id: z.string().min(1),
-  displayName: z.string().min(1),
-  adapterVersion: z.string().min(1),
-  providerVersion: z.string().nullable(),
-}).strict();
-
-export type ProviderMetadata = z.infer<typeof providerMetadataSchema>;
-
-export const providerReadinessSchema = z.object({
-  status: z.enum(["ready", "unavailable", "misconfigured"]),
-  checkedAt: z.string().datetime(),
-  executable: z.string().nullable(),
-  providerVersion: z.string().nullable(),
-  authentication: z.enum(["ready", "missing", "unknown"]),
-  diagnostics: z.array(z.string().max(500)).max(20),
-}).strict();
-
-export type ProviderReadiness = z.infer<typeof providerReadinessSchema>;
+export {
+  PROVIDER_CAPABILITY_SCHEMA_VERSION,
+  providerCapabilitiesV1Schema,
+  providerMetadataSchema,
+  providerReadinessSchema,
+  type ProviderCapabilities,
+  type ProviderCapabilitiesV1,
+  type ProviderMetadata,
+  type ProviderReadiness,
+} from "./schemas.js";
 
 export interface SteeringReceipt {
   state: "accepted" | "queued" | "rejected";
@@ -141,6 +113,7 @@ export type ProviderObservation = {
       outputTokens: number;
       reasoningOutputTokens: number;
     }
+  | { kind: "cursor"; cursor: string }
   | { kind: "warning"; code: string; message: string }
   | { kind: "error"; code: string; message: string }
 );
@@ -158,6 +131,7 @@ export interface CreateExecutionRequest {
   observationSequence?: number;
   recovery?: {
     providerSessionId?: string;
+    cursor?: string;
     state: "paused" | "idle" | "interrupted";
   };
 }
@@ -187,6 +161,20 @@ export interface AgentProvider {
   createExecution(request: CreateExecutionRequest): Promise<ProviderExecution>;
 }
 
+export const providerCertificationSummarySchema = z.object({
+  schemaVersion: z.literal(1),
+  status: z.enum(["passed", "failed", "not_run"]),
+  passed: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+  report: z.string().nullable(),
+  certifiedAt: z.string().datetime().nullable(),
+}).strict();
+
+export type ProviderCertificationSummary = z.infer<
+  typeof providerCertificationSummarySchema
+>;
+
 export function defineCapabilities(
   capabilities: ProviderCapabilitiesV1,
 ): ProviderCapabilitiesV1 {
@@ -194,3 +182,29 @@ export function defineCapabilities(
 }
 
 export { SimulatedProvider } from "./simulated-provider.js";
+export {
+  BufferedProviderExecution,
+  BoundedProviderEventKeys,
+  IdempotentSteeringReceipts,
+  type ProviderObservationInput,
+} from "./execution.js";
+export {
+  normalizedError,
+  normalizedText,
+  normalizedTool,
+  redactSecrets,
+  safeUsage,
+  stableProviderEventKey,
+  type ProviderTextLimits,
+} from "./normalization.js";
+export {
+  GENERIC_AGENT_PROTOCOL_VERSION,
+  genericCreateExecutionResponseSchema,
+  genericAgentManifestSchema,
+  genericCommandSchema,
+  genericObservationBatchSchema,
+  genericObservationEnvelopeSchema,
+  type GenericAgentCommand,
+  type GenericAgentManifest,
+  type GenericObservationEnvelope,
+} from "./protocol.js";

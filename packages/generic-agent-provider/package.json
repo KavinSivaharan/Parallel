@@ -1,8 +1,8 @@
 {
-  "name": "@parallel/provider-sdk",
+  "name": "@parallel/generic-agent-provider",
   "version": "1.0.0",
   "private": false,
-  "description": "Provider-neutral contracts and certification tools for Parallel coding-agent adapters",
+  "description": "Reference HTTP adapter for agents implementing the Parallel Provider SDK protocol",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,16 +12,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
-    },
-    "./certification": {
-      "types": "./dist/certification.d.ts",
-      "import": "./dist/certification.js",
-      "default": "./dist/certification.js"
-    },
-    "./example": {
-      "types": "./dist/example-adapter.d.ts",
-      "import": "./dist/example-adapter.js",
-      "default": "./dist/example-adapter.js"
     }
   },
   "files": ["dist", "README.md"],
@@ -32,6 +22,12 @@
     "test": "vitest run",
     "lint": "tsc -p tsconfig.json --noEmit"
   },
-  "dependencies": { "zod": "^4.0.17" },
-  "devDependencies": { "vitest": "^3.2.4" }
+  "dependencies": {
+    "@parallel/provider-sdk": "workspace:*",
+    "@parallel/workspace-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "vitest": "^3.2.4"
+  }
 }
