@@ -19,6 +19,7 @@ export const eventTypeSchema = z.enum([
   "participant.joined",
   "participant.left",
   "driver.claimed",
+  "driver.transfer_requested",
   "driver.transferred",
   "driver.released",
   "comment.created",

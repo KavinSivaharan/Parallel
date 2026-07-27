@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Headers,
+  Inject,
   Param,
   ParseIntPipe,
   Post,
@@ -18,7 +19,7 @@ import { SessionsService } from "./sessions.service.js";
 @UseGuards(AuthGuard)
 @Controller("v1")
 export class SessionsController {
-  constructor(private readonly sessions: SessionsService) {}
+  constructor(@Inject(SessionsService) private readonly sessions: SessionsService) {}
 
   @Post("sessions")
   create(
@@ -61,6 +62,14 @@ export class SessionsController {
     @Principal() principal: AuthPrincipal,
   ) {
     return this.sessions.artifacts(branchId, principal);
+  }
+
+  @Get("branches/:branchId/collaborators")
+  collaborators(
+    @Param("branchId") branchId: string,
+    @Principal() principal: AuthPrincipal,
+  ) {
+    return this.sessions.collaborators(branchId, principal);
   }
 
   @Post("branches/:branchId/commands")

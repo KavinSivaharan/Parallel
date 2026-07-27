@@ -80,6 +80,25 @@ export class SessionAggregate {
     return [event("driver.claimed", meta, { driverId: participantId })];
   }
 
+  requestDriver(participantId: string, meta: Metadata): PendingEvent[] {
+    this.requireParticipant(participantId);
+    if (this.driverId === participantId) {
+      throw new DomainError("already_driver", "You already control this execution");
+    }
+    return [
+      event("driver.transfer_requested", meta, {
+        requesterId: participantId,
+        currentDriverId: this.driverId,
+      }),
+    ];
+  }
+
+  comment(commentId: string, authorId: string, body: string, meta: Metadata): PendingEvent[] {
+    this.requireParticipant(authorId);
+    if (!body.trim()) throw new DomainError("empty_comment", "Comment body is required");
+    return [event("comment.created", meta, { commentId, authorId, body })];
+  }
+
   proposeSteering(
     proposalId: string,
     proposerId: string,

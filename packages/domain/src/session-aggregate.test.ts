@@ -90,4 +90,14 @@ describe("SessionAggregate", () => {
       "session.paused",
     ]);
   });
+
+  it("rejects resume from an invalid state", () => {
+    const aggregate = SessionAggregate.rehydrate(
+      "branch-1",
+      committed(SessionAggregate.create("branch-1", "alice", "simulator", meta)),
+    );
+    expect(() => aggregate.resume("alice", meta)).toThrowError(
+      expect.objectContaining({ code: "not_paused" }),
+    );
+  });
 });

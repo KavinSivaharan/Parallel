@@ -1,7 +1,7 @@
 import { ForbiddenException, Inject, Injectable, Logger } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import type { Actor, EventEnvelope, PendingEvent, SessionView } from "@parallel/contracts";
-import { SessionAggregate } from "@parallel/domain";
+import { ConcurrencyError, SessionAggregate } from "@parallel/domain";
 import { ulid } from "ulid";
 import type { Pool } from "pg";
 import type { AuthPrincipal, OrganizationRole } from "./auth/auth.types.js";
@@ -14,7 +14,9 @@ export interface Command {
     | "participant.join"
     | "participant.leave"
     | "driver.claim"
+    | "driver.request"
     | "driver.transfer"
+    | "comment.create"
     | "steering.propose"
     | "steering.approve"
     | "steering.reject"
@@ -31,7 +33,9 @@ export class SessionsService {
 
   constructor(
     @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(PostgresEventStore)
     private readonly store: PostgresEventStore,
+    @Inject(OrganizationsService)
     private readonly organizations: OrganizationsService,
   ) {}
 
@@ -81,6 +85,34 @@ export class SessionsService {
       byteSize: Number(row.byte_size),
       contentHash: row.content_hash,
       createdAt: row.created_at.toISOString(),
+    }));
+  }
+
+  async collaborators(branchId: string, principal: AuthPrincipal) {
+    await this.organizations.requireSessionAccess(branchId, principal.userId);
+    const state = await this.state(branchId, principal);
+    if (state.participants.length === 0) return [];
+    const result = await this.pool.query<{
+      id: string;
+      display_name: string;
+      email: string;
+      role: OrganizationRole;
+    }>(
+      `SELECT u.id, u.display_name, u.email, m.role
+       FROM users u
+       JOIN session_branches b ON b.id = $1
+       JOIN sessions s ON s.id = b.session_id
+       JOIN organization_memberships m
+         ON m.organization_id = s.organization_id AND m.user_id = u.id
+       WHERE u.id = ANY($2::text[])`,
+      [branchId, state.participants],
+    );
+    return result.rows.map((row) => ({
+      userId: row.id,
+      displayName: row.display_name,
+      email: row.email,
+      role: row.role,
+      driver: row.id === state.driverId,
     }));
   }
 
@@ -148,7 +180,14 @@ export class SessionsService {
     idempotencyKey: string,
   ): Promise<EventEnvelope[]> {
     const { role } = await this.organizations.requireSessionAccess(branchId, principal.userId);
+    const scope = `branch:${branchId}:user:${principal.userId}`;
+    const requestHash = createHash("sha256").update(JSON.stringify(command)).digest("hex");
+    const replay = await this.store.findIdempotent(scope, idempotencyKey, requestHash);
+    if (replay) return replay.events;
     const stream = await this.store.load(branchId);
+    if (stream.version !== command.expectedVersion) {
+      throw new ConcurrencyError(branchId, command.expectedVersion, stream.version);
+    }
     const aggregate = SessionAggregate.rehydrate(branchId, stream.events);
     const meta = metadata(principal.userId);
     let pending: PendingEvent[];
@@ -162,6 +201,10 @@ export class SessionsService {
       case "driver.claim":
         requireCanCollaborate(role);
         pending = aggregate.claimDriver(principal.userId, meta);
+        break;
+      case "driver.request":
+        requireCanCollaborate(role);
+        pending = aggregate.requestDriver(principal.userId, meta);
         break;
       case "driver.transfer":
         requireCanCollaborate(role);
@@ -177,6 +220,15 @@ export class SessionsService {
           stringField(command.payload, "proposalId"),
           principal.userId,
           stringField(command.payload, "instruction"),
+          meta,
+        );
+        break;
+      case "comment.create":
+        requireCanCollaborate(role);
+        pending = aggregate.comment(
+          stringField(command.payload, "commentId"),
+          principal.userId,
+          stringField(command.payload, "body"),
           meta,
         );
         break;
@@ -221,9 +273,9 @@ export class SessionsService {
       streamId: branchId,
       expectedVersion: command.expectedVersion,
       events: pending,
-      scope: `branch:${branchId}:user:${principal.userId}`,
+      scope,
       key: idempotencyKey,
-      requestHash: createHash("sha256").update(JSON.stringify(command)).digest("hex"),
+      requestHash,
     });
     this.logger.log({
       message: "domain command committed",
