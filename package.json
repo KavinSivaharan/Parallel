@@ -9,6 +9,7 @@
     "dev": "pnpm --parallel --filter @parallel/api --filter @parallel/web dev",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
+    "pretypecheck": "pnpm --filter './packages/**' build",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
