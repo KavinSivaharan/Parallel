@@ -9,6 +9,7 @@ import { DevelopmentIdentityService } from "./development-identity.service.js";
 export class AuthController {
   constructor(
     @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(DevelopmentIdentityService)
     private readonly identity: DevelopmentIdentityService,
   ) {}
 
@@ -39,4 +40,3 @@ export class AuthController {
     return { user: principal, ...this.identity.issue(principal) };
   }
 }
-

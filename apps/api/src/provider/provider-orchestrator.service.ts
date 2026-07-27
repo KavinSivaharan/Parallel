@@ -23,6 +23,7 @@ export class ProviderOrchestratorService implements OnModuleDestroy {
 
   constructor(
     @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(PostgresEventStore)
     private readonly store: PostgresEventStore,
   ) {}
 

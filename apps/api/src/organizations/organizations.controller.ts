@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Post, UseGuards } from "@nestjs/common";
 import { AuthGuard } from "../auth/auth.guard.js";
 import type { AuthPrincipal } from "../auth/auth.types.js";
 import { Principal } from "../auth/principal.decorator.js";
@@ -7,7 +7,10 @@ import { OrganizationsService } from "./organizations.service.js";
 @UseGuards(AuthGuard)
 @Controller("v1/organizations")
 export class OrganizationsController {
-  constructor(private readonly organizations: OrganizationsService) {}
+  constructor(
+    @Inject(OrganizationsService)
+    private readonly organizations: OrganizationsService,
+  ) {}
 
   @Get()
   list(@Principal() principal: AuthPrincipal) {
@@ -27,4 +30,3 @@ export class OrganizationsController {
     return this.organizations.join(principal.userId, body.slug);
   }
 }
-

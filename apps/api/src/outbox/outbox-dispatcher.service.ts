@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { ulid } from "ulid";
 import { LiveGateway } from "../live.gateway.js";
 import { ProviderOrchestratorService } from "../provider/provider-orchestrator.service.js";
@@ -13,8 +13,11 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
   private lastSuccessAt: string | null = null;
 
   constructor(
+    @Inject(OutboxRepository)
     private readonly outbox: OutboxRepository,
+    @Inject(LiveGateway)
     private readonly live: LiveGateway,
+    @Inject(ProviderOrchestratorService)
     private readonly providers: ProviderOrchestratorService,
   ) {}
 
@@ -66,4 +69,3 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
     this.timer.unref();
   }
 }
-

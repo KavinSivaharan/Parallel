@@ -2,6 +2,11 @@
 
 Parallel is the collaboration layer for autonomous coding agents: one live execution, shared by many humans, without replacing the underlying agent.
 
+The current integrated slice supports two authenticated organization members
+sharing one simulated provider execution, proposing and approving steering,
+transferring control, receiving output and artifacts in real time, emergency
+pause, and sequence-based recovery after refresh.
+
 ## Product boundary
 
 Parallel owns identity, permissions, driver control, presence, steering, approvals, durable events, replay, forks, checkpoints, artifacts, and session lifecycle. Provider adapters own translation between that shared runtime and Claude Code, Codex, Devin, OpenHands, or an internal agent.

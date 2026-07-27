@@ -14,6 +14,7 @@ import { PostgresEventStore } from "./persistence/postgres-event-store.js";
 import { SessionsController } from "./sessions.controller.js";
 import { SessionsService } from "./sessions.service.js";
 import { ProviderOrchestratorService } from "./provider/provider-orchestrator.service.js";
+import { RedisService } from "./realtime/redis.service.js";
 
 @Module({
   controllers: [AuthController, HealthController, OrganizationsController, SessionsController],
@@ -34,6 +35,7 @@ import { ProviderOrchestratorService } from "./provider/provider-orchestrator.se
     OutboxRepository,
     ProviderOrchestratorService,
     OutboxDispatcherService,
+    RedisService,
     SessionsService,
     LiveGateway,
   ],

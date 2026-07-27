@@ -38,4 +38,5 @@ flowchart TB
 - [Event model](event-model.md)
 - [Database model](database.md)
 - [Provider protocol](provider-protocol.md)
+- [Collaborative execution loop](collaborative-loop.md)
 - [API](../api.md)

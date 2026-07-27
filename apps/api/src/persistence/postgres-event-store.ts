@@ -10,24 +10,20 @@ export class PostgresEventStore implements EventStore {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
 
   async load(streamId: string, afterSequence = 0): Promise<EventStream> {
-    const [head, rows] = await Promise.all([
-      this.pool.query<{ version: string }>(
-        "SELECT version FROM event_streams WHERE stream_id = $1",
-        [streamId],
-      ),
-      this.pool.query<EventRow>(
-        `SELECT id, stream_id, sequence, type, schema_version, actor,
-                causation_id, correlation_id, occurred_at, payload
-           FROM events
-          WHERE stream_id = $1 AND sequence > $2
-          ORDER BY sequence`,
-        [streamId, afterSequence],
-      ),
-    ]);
+    const result = await this.pool.query<EventRowWithHead>(
+      `SELECT s.version, e.id, e.stream_id, e.sequence, e.type, e.schema_version,
+              e.actor, e.causation_id, e.correlation_id, e.occurred_at, e.payload
+         FROM event_streams s
+         LEFT JOIN events e
+           ON e.stream_id = s.stream_id AND e.sequence > $2
+        WHERE s.stream_id = $1
+        ORDER BY e.sequence`,
+      [streamId, afterSequence],
+    );
     return {
       streamId,
-      version: Number(head.rows[0]?.version ?? 0),
-      events: rows.rows.map(toEnvelope),
+      version: Number(result.rows[0]?.version ?? 0),
+      events: result.rows.filter(hasEvent).map(toEnvelope),
     };
   }
 
@@ -133,6 +129,25 @@ export class PostgresEventStore implements EventStore {
       client.release();
     }
   }
+
+  async findIdempotent(
+    scope: string,
+    key: string,
+    requestHash: string,
+  ): Promise<AppendResult | null> {
+    const result = await this.pool.query<{
+      request_hash: string;
+      response: AppendResult;
+    }>(
+      `SELECT request_hash, response FROM idempotency_keys
+       WHERE scope = $1 AND key = $2`,
+      [scope, key],
+    );
+    const saved = result.rows[0];
+    if (!saved) return null;
+    if (saved.request_hash !== requestHash) throw new Error("IDEMPOTENCY_KEY_REUSED");
+    return saved.response;
+  }
 }
 
 async function appendWithinTransaction(
@@ -209,6 +224,15 @@ interface EventRow {
   correlation_id: string;
   occurred_at: Date;
   payload: Record<string, unknown>;
+}
+
+interface EventRowWithHead extends Omit<EventRow, "id"> {
+  version: string;
+  id: string | null;
+}
+
+function hasEvent(row: EventRowWithHead): row is EventRowWithHead & { id: string } {
+  return row.id !== null;
 }
 
 function toEnvelope(row: EventRow): EventEnvelope {
