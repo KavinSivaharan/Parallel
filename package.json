@@ -4,6 +4,7 @@
   "packageManager": "pnpm@10.14.0",
   "scripts": {
     "build": "pnpm -r build",
+    "predev": "pnpm --filter './packages/**' build",
     "dev": "pnpm --parallel --filter @parallel/api --filter @parallel/web dev",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
@@ -13,4 +14,3 @@
     "typescript": "^5.9.2"
   }
 }
-

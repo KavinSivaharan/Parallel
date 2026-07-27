@@ -1,0 +1,37 @@
+{
+  "name": "@parallel/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "nest build",
+    "dev": "nest start --watch",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/platform-express": "^11.1.6",
+    "@nestjs/platform-socket.io": "^11.1.6",
+    "@nestjs/websockets": "^11.1.6",
+    "@parallel/contracts": "workspace:*",
+    "@parallel/domain": "workspace:*",
+    "@parallel/provider-sdk": "workspace:*",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "pg": "^8.16.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "socket.io": "^4.8.1",
+    "ulid": "^3.0.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.10",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.3.0",
+    "@types/pg": "^8.15.5",
+    "vitest": "^3.2.4"
+  }
+}
