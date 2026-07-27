@@ -55,7 +55,8 @@ pnpm build
 ```
 
 See [developer setup](docs/development.md), [API documentation](docs/api.md),
-and [architecture](docs/architecture/README.md).
+[architecture](docs/architecture/README.md), and the
+[Milestone 3 engineering report](docs/milestone-3.md).
 
 Development sign-in is intentionally local-only and is disabled when
 `NODE_ENV=production`. It exercises the same bearer-token and organization
