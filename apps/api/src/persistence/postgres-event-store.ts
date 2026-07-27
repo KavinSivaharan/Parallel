@@ -52,6 +52,7 @@ export class PostgresEventStore implements EventStore {
     branchId: string;
     organizationId: string;
     title: string;
+    objective: string;
     providerId: string;
     createdBy: string;
     events: PendingEvent[];
@@ -60,9 +61,17 @@ export class PostgresEventStore implements EventStore {
     try {
       await client.query("BEGIN");
       await client.query(
-        `INSERT INTO sessions (id, organization_id, title, provider_id, created_by)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [input.sessionId, input.organizationId, input.title, input.providerId, input.createdBy],
+        `INSERT INTO sessions
+          (id, organization_id, title, objective, provider_id, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          input.sessionId,
+          input.organizationId,
+          input.title,
+          input.objective,
+          input.providerId,
+          input.createdBy,
+        ],
       );
       await client.query("INSERT INTO event_streams (stream_id) VALUES ($1)", [input.branchId]);
       await client.query(

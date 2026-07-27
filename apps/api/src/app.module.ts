@@ -14,6 +14,7 @@ import { PostgresEventStore } from "./persistence/postgres-event-store.js";
 import { SessionsController } from "./sessions.controller.js";
 import { SessionsService } from "./sessions.service.js";
 import { ProviderOrchestratorService } from "./provider/provider-orchestrator.service.js";
+import { ProvidersController } from "./provider/providers.controller.js";
 import { RedisService } from "./realtime/redis.service.js";
 import { WorkspaceManager } from "@parallel/workspace-runtime";
 import { resolve } from "node:path";
@@ -27,6 +28,7 @@ import { WorkspacesService } from "./workspaces/workspaces.service.js";
     OrganizationsController,
     SessionsController,
     WorkspacesController,
+    ProvidersController,
   ],
   providers: [
     {

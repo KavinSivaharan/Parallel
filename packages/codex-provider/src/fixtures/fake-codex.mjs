@@ -68,7 +68,11 @@ emit({
   item: {
     id: `message-${isResume ? "resume" : "initial"}`,
     type: "agent_message",
-    text: isResume ? "Continuation complete." : "Initial turn complete.",
+    text: instruction.includes("large-output")
+      ? "x".repeat(40_000)
+      : isResume
+        ? "Continuation complete."
+        : "Initial turn complete.",
   },
 });
 emit({

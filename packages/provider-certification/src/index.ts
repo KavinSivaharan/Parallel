@@ -104,9 +104,9 @@ export async function certifyProvider(input: {
   }
 
   if (capabilities.pause === "none") {
-    skipped(checks, "cancellation", "Provider declares pause unsupported");
+    skipped(checks, "pause_behavior", "Provider declares pause unsupported");
   } else {
-    await record(checks, "cancellation", async () => {
+    await record(checks, "pause_behavior", async () => {
       await execution.pause("Certification pause");
     });
   }
@@ -116,6 +116,14 @@ export async function certifyProvider(input: {
   } else {
     await record(checks, "lifecycle_transitions", async () => {
       await execution.resume(null);
+    });
+  }
+
+  if (capabilities.checkpointAwareness === "none") {
+    skipped(checks, "checkpoint_behavior", "Provider declares checkpoint awareness unsupported");
+  } else {
+    await record(checks, "checkpoint_behavior", async () => {
+      await execution.checkpoint("Certification checkpoint");
     });
   }
 
@@ -138,7 +146,13 @@ export async function certifyProvider(input: {
     }
   }
 
-  await execution.cancel("Certification complete");
+  if (capabilities.cancel) {
+    await record(checks, "cancellation", async () => {
+      await execution.cancel("Certification complete");
+    });
+  } else {
+    skipped(checks, "cancellation", "Provider declares cancellation unsupported");
+  }
   await execution.dispose();
   await pump;
   await record(checks, "event_ordering", async () => {

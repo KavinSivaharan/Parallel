@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { CodexProvider } from "./provider.js";
+import { CodexProvider, type CodexProviderOptions } from "./provider.js";
 import type { ProviderObservation } from "@parallel/provider-sdk";
 
 const temporaryRoots: string[] = [];
@@ -132,9 +132,80 @@ describe("CodexProvider", () => {
     const timedOut = await runToEnd(timeoutProvider, "branch-timeout", "slow operation", "timed_out");
     expect(timedOut.some((item) => item.kind === "status" && item.status === "timed_out")).toBe(true);
   });
+
+  it("queues steering before startup and during a turn, then rejects it after cancellation", async () => {
+    const provider = await createProvider({ maxExecutionMs: 5_000 });
+    const execution = await provider.createExecution({
+      sessionId: "session-steering-states",
+      branchId: "branch-steering-states",
+      workspaceRef: "session://session-steering-states/branch-steering-states",
+      initialInstruction: "slow initial operation",
+      idempotencyKey: "create-steering-states",
+    });
+    const observations: ProviderObservation[] = [];
+    const pump = (async () => {
+      for await (const observation of execution.observations()) observations.push(observation);
+    })();
+
+    expect(await execution.steer("queued before startup", "steer-before")).toMatchObject({
+      state: "queued",
+      model: "continuation",
+    });
+    await execution.start();
+    await waitFor(() =>
+      observations.some((item) => item.kind === "status" && item.status === "turn_started"),
+    );
+    const during = await execution.steer("queued while running", "steer-during");
+    expect(await execution.steer("queued while running", "steer-during")).toEqual(during);
+    await waitFor(
+      () =>
+        observations.filter(
+          (item) => item.kind === "steering" && item.state === "delivered",
+        ).length === 2,
+      8_000,
+    );
+    await waitFor(() => statusCount(observations, "completed") === 1, 8_000);
+    await execution.cancel("finished certification lifecycle");
+    expect(await execution.steer("must reject", "steer-after-cancel")).toMatchObject({
+      state: "rejected",
+    });
+    await execution.dispose();
+    await pump;
+  });
+
+  it("caps provider output and emitted artifacts", async () => {
+    const provider = await createProvider({
+      maxOutputBytes: 16 * 1024,
+      maxArtifactBytes: 16 * 1024,
+    });
+    const observations = await runToEnd(
+      provider,
+      "branch-output-limit",
+      "large-output",
+    );
+    const outputBytes = observations
+      .filter((item) => item.kind === "output")
+      .reduce(
+        (total, item) =>
+          total + Buffer.byteLength(item.kind === "output" ? item.text : ""),
+        0,
+      );
+    expect(outputBytes).toBeLessThanOrEqual(16 * 1024);
+    expect(
+      observations.some(
+        (item) =>
+          item.kind === "warning" && item.code === "codex_output_limit_reached",
+      ),
+    ).toBe(true);
+    expect(
+      observations
+        .filter((item) => item.kind === "artifact")
+        .every((item) => item.kind !== "artifact" || item.bytes.byteLength <= 16 * 1024),
+    ).toBe(true);
+  });
 });
 
-async function createProvider(options: { maxExecutionMs?: number } = {}) {
+async function createProvider(options: CodexProviderOptions = {}) {
   const root = await mkdtemp(join(tmpdir(), "parallel-codex-test-"));
   temporaryRoots.push(root);
   const provider = new CodexProvider(new WorkspaceManager(root), {

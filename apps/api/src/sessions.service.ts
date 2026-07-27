@@ -8,6 +8,7 @@ import type { AuthPrincipal, OrganizationRole } from "./auth/auth.types.js";
 import { OrganizationsService } from "./organizations/organizations.service.js";
 import { PostgresEventStore } from "./persistence/postgres-event-store.js";
 import { PG_POOL } from "./persistence/database.constants.js";
+import { ProviderOrchestratorService } from "./provider/provider-orchestrator.service.js";
 
 export interface Command {
   type:
@@ -40,6 +41,8 @@ export class SessionsService {
     private readonly store: PostgresEventStore,
     @Inject(OrganizationsService)
     private readonly organizations: OrganizationsService,
+    @Inject(ProviderOrchestratorService)
+    private readonly providers: ProviderOrchestratorService,
   ) {}
 
   async list(organizationId: string, principal: AuthPrincipal) {
@@ -48,10 +51,12 @@ export class SessionsService {
       session_id: string;
       branch_id: string;
       title: string;
+      objective: string;
       provider_id: string;
       created_at: Date;
     }>(
-      `SELECT s.id AS session_id, b.id AS branch_id, s.title, s.provider_id, s.created_at
+      `SELECT s.id AS session_id, b.id AS branch_id, s.title, s.objective,
+              s.provider_id, s.created_at
        FROM sessions s
        JOIN session_branches b ON b.session_id = s.id AND b.name = 'main'
        WHERE s.organization_id = $1
@@ -62,6 +67,7 @@ export class SessionsService {
       sessionId: row.session_id,
       branchId: row.branch_id,
       title: row.title,
+      objective: row.objective,
       providerId: row.provider_id,
       createdAt: row.created_at.toISOString(),
     }));
@@ -128,6 +134,7 @@ export class SessionsService {
     principal: AuthPrincipal;
     organizationId: string;
     title: string;
+    objective: string;
     providerId: string;
     repositoryUrl?: string;
     baseRef?: string;
@@ -137,6 +144,7 @@ export class SessionsService {
       input.principal.userId,
     );
     requireCanCollaborate(role);
+    await this.providers.requireReady(input.providerId);
     const sessionId = ulid();
     const branchId = ulid();
     const meta = metadata(input.principal.userId);
@@ -151,7 +159,7 @@ export class SessionsService {
         type: "execution.requested",
         schemaVersion: 1,
         ...meta,
-        payload: { providerId: input.providerId, initialInstruction: input.title },
+        payload: { providerId: input.providerId, initialInstruction: input.objective },
       },
       {
         type: "session.started",
@@ -170,6 +178,7 @@ export class SessionsService {
       branchId,
       organizationId: input.organizationId,
       title: input.title.trim(),
+      objective: input.objective.trim(),
       providerId: input.providerId,
       createdBy: input.principal.userId,
       events: pending,

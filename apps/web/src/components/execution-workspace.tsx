@@ -44,8 +44,39 @@ interface SessionSummary {
   sessionId: string;
   branchId: string;
   title: string;
+  objective: string;
   providerId: string;
   createdAt: string;
+}
+
+interface ProviderCatalogItem {
+  metadata: {
+    id: string;
+    displayName: string;
+    adapterVersion: string;
+    providerVersion: string | null;
+  };
+  capabilities: {
+    schemaVersion: 1;
+    steering: "interactive" | "continuation" | "none";
+    pause: "interrupt_current" | "boundary_only" | "none";
+    resume: "same_process" | "continuation" | "new_execution" | "none";
+    cancel: boolean;
+    persistentConversation: boolean;
+    reconnect: "reattach" | "cursor_replay" | "workspace_only" | "none";
+    checkpointAwareness: "native" | "workspace" | "none";
+    shellExecution: boolean;
+    filesystemEvents: boolean;
+    artifactOutput: boolean;
+    toolCallVisibility: "structured" | "text_only" | "none";
+    usageReporting: boolean;
+  };
+  readiness: {
+    status: "ready" | "unavailable" | "misconfigured";
+    authentication: "ready" | "missing" | "unknown";
+    providerVersion: string | null;
+    diagnostics: string[];
+  };
 }
 
 interface Collaborator {
@@ -108,6 +139,7 @@ export function ExecutionWorkspace() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [providers, setProviders] = useState<ProviderCatalogItem[]>([]);
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [state, setState] = useState<SessionView | null>(null);
   const [events, setEvents] = useState<EventEnvelope[]>([]);
@@ -148,10 +180,14 @@ export function ExecutionWorkspace() {
 
   useEffect(() => {
     if (!auth) return;
-    void request<Organization[]>("/v1/organizations")
-      .then((items) => {
+    void Promise.all([
+      request<Organization[]>("/v1/organizations"),
+      request<ProviderCatalogItem[]>("/v1/providers"),
+    ])
+      .then(([items, providerItems]) => {
         setOrganizations(items);
         setOrganization((current) => current ?? items[0] ?? null);
+        setProviders(providerItems);
       })
       .catch((reason: Error) => setError(reason.message));
   }, [auth, request]);
@@ -288,7 +324,7 @@ export function ExecutionWorkspace() {
     }
   }
 
-  async function forkCheckpoint(checkpointId: string): Promise<void> {
+  async function forkCheckpoint(checkpointId: string, objective: string): Promise<void> {
     if (!session) return;
     setBusy(true);
     setError(null);
@@ -298,7 +334,7 @@ export function ExecutionWorkspace() {
         {
           method: "POST",
           headers: { "idempotency-key": crypto.randomUUID() },
-          body: "{}",
+          body: JSON.stringify({ objective }),
         },
       );
       setSession({
@@ -376,6 +412,7 @@ export function ExecutionWorkspace() {
         organization={organization}
         organizations={organizations}
         sessions={sessions}
+        providers={providers}
         request={request}
         onOrganization={setOrganization}
         onSession={async (selected) => {
@@ -414,6 +451,11 @@ export function ExecutionWorkspace() {
           candidate.payload.proposalId === event.payload.proposalId,
       ),
   );
+  const selectedProvider = providers.find(
+    (provider) => provider.metadata.id === session.providerId,
+  );
+  const executionState = latestProviderState(events);
+  const usage = aggregateUsage(events);
 
   return (
     <main className="shell">
@@ -439,8 +481,9 @@ export function ExecutionWorkspace() {
 
       <section className="statusbar">
         <div className="live-status">
-          <span className={`live-dot ${state.status !== "running" ? "paused" : ""}`} />
-          <strong>{state.status.toUpperCase()}</strong><span>{session.providerId}</span>
+          <span className={`live-dot ${state.status !== "running" || executionState === "paused" ? "paused" : ""}`} />
+          <strong>{executionState.toUpperCase()}</strong>
+          <span>{selectedProvider?.metadata.displayName ?? session.providerId}</span>
           <span className="status-divider" /><span>{connected ? "realtime connected" : "catch-up mode"}</span>
         </div>
         <div className="driver">
@@ -480,7 +523,11 @@ export function ExecutionWorkspace() {
           {error && <div className="inline-error"><AlertTriangle size={14} /> {error}</div>}
           <Composer
             isDriver={isDriver}
-            steeringSupported={session.providerId !== "local-workspace"}
+            steeringSupported={
+              selectedProvider !== undefined &&
+              selectedProvider.capabilities.steering !== "none"
+            }
+            steeringModel={selectedProvider?.capabilities.steering ?? "none"}
             disabled={busy || !canCollaborate || state.status !== "running"}
             onSubmit={(value) =>
               command(isDriver ? "steering.send" : "steering.propose", isDriver
@@ -512,7 +559,12 @@ export function ExecutionWorkspace() {
             }
             onFork={forkCheckpoint}
             onCompare={compareCheckpoints}
+            allowManualCommands={session.providerId === "local-workspace"}
           />
+
+          {selectedProvider && (
+            <ProviderPanel provider={selectedProvider} usage={usage} objective={session.objective} />
+          )}
 
           <section>
             <div className="context-heading"><h2>Steering</h2><span className="badge">{pendingProposals.length} pending</span></div>
@@ -583,6 +635,7 @@ function RuntimePanel({
   onRestore,
   onFork,
   onCompare,
+  allowManualCommands,
 }: {
   workspace: WorkspaceMetadata | null;
   checkpoints: Checkpoint[];
@@ -593,14 +646,18 @@ function RuntimePanel({
   onCommand: (executable: string, args: string[]) => Promise<void>;
   onCheckpoint: (summary: string) => Promise<void>;
   onRestore: (checkpointId: string) => Promise<void>;
-  onFork: (checkpointId: string) => Promise<void>;
+  onFork: (checkpointId: string, objective: string) => Promise<void>;
   onCompare: (from: string, to: string) => Promise<CheckpointComparison>;
+  allowManualCommands: boolean;
 }) {
   const [executable, setExecutable] = useState("node");
   const [argsText, setArgsText] = useState("[\"--version\"]");
   const [summary, setSummary] = useState("Verified workspace state");
   const [formError, setFormError] = useState<string | null>(null);
   const [comparison, setComparison] = useState<CheckpointComparison | null>(null);
+  const [forkObjective, setForkObjective] = useState(
+    "Explore an independent implementation from this checkpoint and run the test suite.",
+  );
 
   async function run(event: React.FormEvent) {
     event.preventDefault();
@@ -648,14 +705,18 @@ function RuntimePanel({
         <p className="empty-note">Creating the execution directory and Git repository…</p>
       )}
 
-      <form className="runtime-command" onSubmit={run}>
+      {allowManualCommands ? <form className="runtime-command" onSubmit={run}>
         <label>Executable<input value={executable} onChange={(event) => setExecutable(event.target.value)} /></label>
         <label>Arguments (JSON)<textarea value={argsText} onChange={(event) => setArgsText(event.target.value)} /></label>
         {formError && <p className="runtime-error">{formError}</p>}
         <button disabled={disabled || !isDriver || !workspace}>
           <TerminalSquare size={13} /> Run in shared workspace
         </button>
-      </form>
+      </form> : (
+        <p className="runtime-boundary">
+          The coding agent owns shell and file tools. Parallel observes them through the provider adapter.
+        </p>
+      )}
 
       <form className="checkpoint-form" onSubmit={createCheckpoint}>
         <input value={summary} onChange={(event) => setSummary(event.target.value)} aria-label="Checkpoint summary" />
@@ -670,6 +731,10 @@ function RuntimePanel({
           </button>
         )}
       </div>
+      <label className="fork-objective">
+        Fork objective
+        <textarea value={forkObjective} onChange={(event) => setForkObjective(event.target.value)} />
+      </label>
       {comparison && (
         <div className="comparison-summary">
           <strong>{comparison.files.length} files changed</strong>
@@ -685,13 +750,61 @@ function RuntimePanel({
               <button type="button" disabled={busy || !isDriver} onClick={() => void onRestore(checkpoint.id)}>
                 <RotateCcw size={11} /> Restore
               </button>
-              <button type="button" disabled={busy || !canFork} onClick={() => void onFork(checkpoint.id)}>
+              <button type="button" disabled={busy || !canFork || !forkObjective.trim()} onClick={() => void onFork(checkpoint.id, forkObjective.trim())}>
                 <GitFork size={11} /> Fork
               </button>
             </div>
           </article>
         ))}
       </div>
+    </section>
+  );
+}
+
+function ProviderPanel({
+  provider,
+  usage,
+  objective,
+}: {
+  provider: ProviderCatalogItem;
+  usage: ReturnType<typeof aggregateUsage>;
+  objective: string;
+}) {
+  const capabilityRows = [
+    ["Steering", provider.capabilities.steering],
+    ["Pause", provider.capabilities.pause],
+    ["Resume", provider.capabilities.resume],
+    ["Reconnect", provider.capabilities.reconnect],
+    ["Checkpoints", provider.capabilities.checkpointAwareness],
+    ["Tool visibility", provider.capabilities.toolCallVisibility],
+  ];
+  return (
+    <section className="provider-panel">
+      <div className="context-heading">
+        <h2>Agent provider</h2>
+        <span className={provider.readiness.status === "ready" ? "healthy" : "badge"}>
+          {provider.readiness.status}
+        </span>
+      </div>
+      <strong className="provider-name">{provider.metadata.displayName}</strong>
+      <p className="provider-objective">{objective}</p>
+      <dl className="capability-list">
+        {capabilityRows.map(([label, value]) => (
+          <div key={label}><dt>{label}</dt><dd>{String(value).replaceAll("_", " ")}</dd></div>
+        ))}
+      </dl>
+      {provider.capabilities.steering === "continuation" && (
+        <p className="provider-boundary">
+          Approved steering is pending while a turn runs, then reaches the same Codex thread through continuation.
+        </p>
+      )}
+      {provider.capabilities.usageReporting && (
+        <div className="usage-grid">
+          <span><strong>{usage.inputTokens.toLocaleString()}</strong>input</span>
+          <span><strong>{usage.cachedInputTokens.toLocaleString()}</strong>cached</span>
+          <span><strong>{usage.outputTokens.toLocaleString()}</strong>output</span>
+        </div>
+      )}
     </section>
   );
 }
@@ -771,19 +884,28 @@ function OrganizationSetup({
 }
 
 function SessionPicker({
-  user, organization, organizations, sessions, request, onOrganization, onSession, onCreated, onSignOut,
+  user, organization, organizations, sessions, providers, request, onOrganization, onSession, onCreated, onSignOut,
 }: {
   user: User;
   organization: Organization;
   organizations: Organization[];
   sessions: SessionSummary[];
+  providers: ProviderCatalogItem[];
   request: <T>(path: string, init?: RequestInit) => Promise<T>;
   onOrganization: (organization: Organization) => void;
   onSession: (session: SessionSummary) => Promise<void>;
   onCreated: (session: SessionSummary) => void;
   onSignOut: () => void;
 }) {
-  const [title, setTitle] = useState("Shared coding workspace");
+  const preferredProvider =
+    providers.find((item) => item.metadata.id === "codex" && item.readiness.status === "ready") ??
+    providers.find((item) => item.metadata.id === "simulator" && item.readiness.status === "ready") ??
+    providers.find((item) => item.readiness.status === "ready");
+  const [title, setTitle] = useState("Ledger allocation repair");
+  const [objective, setObjective] = useState(
+    "Inspect the repository, find the failing ledger allocation edge case, implement a robust fix across the relevant files, and run the complete test suite.",
+  );
+  const [providerId, setProviderId] = useState(preferredProvider?.metadata.id ?? "codex");
   const [repositoryUrl, setRepositoryUrl] = useState("");
   const [baseRef, setBaseRef] = useState("");
   async function create(event: React.FormEvent) {
@@ -793,12 +915,13 @@ function SessionPicker({
       body: JSON.stringify({
         organizationId: organization.id,
         title,
-        providerId: "local-workspace",
+        objective,
+        providerId,
         ...(repositoryUrl.trim() ? { repositoryUrl: repositoryUrl.trim() } : {}),
         ...(baseRef.trim() ? { baseRef: baseRef.trim() } : {}),
       }),
     });
-    onCreated({ ...created, title, providerId: "local-workspace", createdAt: new Date().toISOString() });
+    onCreated({ ...created, title, objective, providerId, createdAt: new Date().toISOString() });
   }
   return (
     <main className="session-home">
@@ -811,11 +934,54 @@ function SessionPicker({
         <section>
           <div className="home-heading"><div><p className="eyebrow">LIVE EXECUTIONS</p><h1>{organization.name}</h1></div></div>
           <form className="new-session" onSubmit={create}>
-            <input value={title} onChange={(event) => setTitle(event.target.value)} aria-label="Execution title" />
-            <input value={repositoryUrl} onChange={(event) => setRepositoryUrl(event.target.value)} placeholder="Git repository URL (optional)" aria-label="Git repository URL" />
-            <input value={baseRef} onChange={(event) => setBaseRef(event.target.value)} placeholder="Base branch or tag (optional)" aria-label="Base Git reference" />
-            <button><Plus size={15} /> Start real workspace</button>
+            <div className="session-field">
+              <label>Execution title</label>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} aria-label="Execution title" required />
+            </div>
+            <div className="session-field objective-field">
+              <label>Coding objective</label>
+              <textarea value={objective} onChange={(event) => setObjective(event.target.value)} aria-label="Coding objective" required />
+            </div>
+            <div className="session-field">
+              <label>Provider</label>
+              <select value={providerId} onChange={(event) => setProviderId(event.target.value)}>
+                {providers.map((provider) => (
+                  <option
+                    value={provider.metadata.id}
+                    disabled={provider.readiness.status !== "ready"}
+                    key={provider.metadata.id}
+                  >
+                    {provider.metadata.displayName} · {provider.readiness.status}
+                  </option>
+                ))}
+              </select>
+              <small>
+                {providers.find((item) => item.metadata.id === providerId)?.capabilities.steering === "continuation"
+                  ? "Steering queues until the next provider turn."
+                  : "Capabilities are enforced by the adapter."}
+              </small>
+            </div>
+            <div className="session-field">
+              <label>Repository</label>
+              <input value={repositoryUrl} onChange={(event) => setRepositoryUrl(event.target.value)} placeholder="Local path or Git URL (optional)" aria-label="Git repository URL" />
+              <input value={baseRef} onChange={(event) => setBaseRef(event.target.value)} placeholder="Base branch or tag (optional)" aria-label="Base Git reference" />
+            </div>
+            <button disabled={!providers.some((item) => item.metadata.id === providerId && item.readiness.status === "ready")}>
+              <Plus size={15} /> Start shared execution
+            </button>
           </form>
+          <div className="provider-readiness">
+            {providers.map((provider) => (
+              <article className={provider.readiness.status} key={provider.metadata.id}>
+                <span className="provider-state-dot" />
+                <div>
+                  <strong>{provider.metadata.displayName}</strong>
+                  <small>{provider.readiness.status} · auth {provider.readiness.authentication}</small>
+                </div>
+                <em>{provider.capabilities.steering} steering</em>
+              </article>
+            ))}
+          </div>
           <div className="session-list">
             {sessions.map((item) => <button key={item.branchId} onClick={() => void onSession(item)}><span className="session-state"><Radio size={15} /></span><span><strong>{item.title}</strong><small>{item.providerId} · main · {new Date(item.createdAt).toLocaleString()}</small></span><span>Open →</span></button>)}
             {sessions.length === 0 && <div className="empty-session"><Radio size={28} /><h2>No executions yet</h2><p>Start one shared provider run above.</p></div>}
@@ -826,9 +992,10 @@ function SessionPicker({
   );
 }
 
-function Composer({ isDriver, steeringSupported, disabled, onSubmit, onComment }: {
+function Composer({ isDriver, steeringSupported, steeringModel, disabled, onSubmit, onComment }: {
   isDriver: boolean;
   steeringSupported: boolean;
+  steeringModel: "interactive" | "continuation" | "none";
   disabled: boolean;
   onSubmit: (value: string) => Promise<void>;
   onComment: (value: string) => Promise<void>;
@@ -845,7 +1012,7 @@ function Composer({ isDriver, steeringSupported, disabled, onSubmit, onComment }
   }
   return (
     <form className="composer" onSubmit={submit}>
-      <div className="composer-modes"><button type="button" disabled={!steeringSupported} {...(!steeringSupported ? { title: "This runtime exposes structured commands; agent steering arrives with agent adapters." } : {})} className={mode === "steer" ? "active" : ""} onClick={() => setMode("steer")}><Send size={12} /> {isDriver ? "Instruction" : "Steering proposal"}</button><button type="button" className={mode === "comment" ? "active" : ""} onClick={() => setMode("comment")}><MessageSquare size={12} /> Comment</button></div>
+      <div className="composer-modes"><button type="button" disabled={!steeringSupported} {...(!steeringSupported ? { title: "This provider does not support natural-language steering." } : {})} className={mode === "steer" ? "active" : ""} onClick={() => setMode("steer")}><Send size={12} /> {isDriver ? "Instruction" : "Steering proposal"}</button><button type="button" className={mode === "comment" ? "active" : ""} onClick={() => setMode("comment")}><MessageSquare size={12} /> Comment</button><span>{steeringModel === "continuation" ? "delivered at next turn boundary" : steeringModel === "interactive" ? "interactive delivery" : "steering unavailable"}</span></div>
       <div><input value={value} onChange={(event) => setValue(event.target.value)} placeholder={mode === "comment" ? "Comment without affecting the agent…" : isDriver ? "Steer the live execution…" : "Propose steering to the driver…"} /><button disabled={disabled && mode === "steer"}><Send size={14} /></button></div>
     </form>
   );
@@ -870,7 +1037,10 @@ function describeEvent(event: EventEnvelope, people: Collaborator[]) {
   if (event.type === "steering.proposed") return { kind: "steering", label: "PROPOSAL", title: String(p.instruction), detail: `Proposed by ${nameFor(String(p.proposerId), people)}` };
   if (event.type === "steering.approved") return { kind: "steering", label: "APPROVED", title: String(p.instruction), detail: `Approved by ${nameFor(String(p.approverId), people)}` };
   if (event.type === "steering.rejected") return { kind: "steering", label: "REJECTED", title: String(p.instruction ?? "Steering proposal rejected"), detail: nameFor(String(p.rejectorId), people) };
-  if (event.type === "steering.dispatched") return { kind: "steering", label: "DELIVERED", title: "Instruction delivered to provider", detail: String(p.providerExecutionId) };
+  if (event.type === "steering.queued") return { kind: "steering", label: "PENDING DELIVERY", title: "Instruction queued for the next provider boundary", detail: String(p.deliveryModel ?? "continuation") };
+  if (event.type === "steering.dispatched") return { kind: "steering", label: "DISPATCHED", title: "Instruction accepted by the provider adapter", detail: String(p.providerExecutionId) };
+  if (event.type === "steering.delivered") return { kind: "steering", label: "DELIVERED", title: "Instruction reached the provider execution", detail: `${String(p.deliveryModel)} · ${String(p.commandId ?? "")}` };
+  if (event.type === "steering.delivery_failed") return { kind: "error", label: "STEERING FAILED", title: String(p.reason ?? "Provider rejected steering"), detail: String(p.commandId ?? "") };
   if (event.type === "workspace.created") return { kind: "workspace", label: "WORKSPACE", title: `Workspace ready on ${String(p.branch)}`, detail: String(p.repositoryPath) };
   if (event.type === "workspace.command_requested") return { kind: "terminal", label: "COMMAND QUEUED", title: commandLabel(p), detail: `Requested by ${nameFor(String(p.requestedBy), people)}` };
   if (event.type === "terminal.command_started") return { kind: "terminal", label: "COMMAND STARTED", title: commandLabel(p), detail: String(p.commandId) };
@@ -894,8 +1064,12 @@ function describeEvent(event: EventEnvelope, people: Collaborator[]) {
   if (event.type === "session.resumed") return { kind: "system", label: "RESUMED", title: "Shared execution resumed", detail: event.actor.kind };
   if (event.type === "provider.output_received") return { kind: "provider", label: "PROVIDER OUTPUT", title: String(p.text), detail: String(p.channel) };
   if (event.type === "provider.failed") return { kind: "error", label: "PROVIDER FAILURE", title: String(p.message), detail: String(p.code) };
+  if (event.type === "provider.warning") return { kind: "error", label: "PROVIDER WARNING", title: String(p.message), detail: String(p.code) };
+  if (event.type === "provider.timed_out") return { kind: "error", label: "TIMEOUT", title: "Provider execution exceeded its duration limit", detail: String(p.providerSessionId ?? "") };
+  if (event.type === "provider.crashed") return { kind: "error", label: "PROVIDER CRASH", title: String(p.message ?? "Provider process disappeared"), detail: String(p.code ?? "") };
+  if (event.type === "provider.usage_reported") return { kind: "provider", label: "USAGE", title: `${Number(p.outputTokens ?? 0).toLocaleString()} output tokens`, detail: `${Number(p.inputTokens ?? 0).toLocaleString()} input · ${Number(p.cachedInputTokens ?? 0).toLocaleString()} cached` };
   if (event.type === "artifact.created") return { kind: "tool", label: "ARTIFACT", title: String(p.name), detail: `${p.mediaType} · ${p.byteSize} bytes` };
-  if (event.type.startsWith("provider.tool")) return { kind: "tool", label: "TOOL", title: `${String(p.name)} ${event.type.endsWith("completed") ? "completed" : "started"}`, detail: String(p.callId) };
+  if (event.type.startsWith("provider.tool")) return { kind: "tool", label: String(p.name) === "shell" ? "SHELL TOOL" : "TOOL", title: `${String(p.name)} ${event.type.endsWith("completed") ? "completed" : "started"}`, detail: clipText([p.input, p.output, p.exitCode === undefined ? null : `exit ${String(p.exitCode)}`].filter(Boolean).join("\n"), 3_000) || String(p.callId) };
   if (event.type === "driver.transferred") return { kind: "system", label: "CONTROL", title: `Driver transferred to ${nameFor(String(p.toId), people)}`, detail: null };
   if (event.type === "driver.transfer_requested") return { kind: "system", label: "CONTROL REQUEST", title: `${nameFor(String(p.requesterId), people)} requested control`, detail: null };
   return { kind: "system", label: "LIFECYCLE", title: event.type.replaceAll(".", " "), detail: event.actor.kind };
@@ -952,4 +1126,45 @@ function initials(name: string): string {
 }
 function nameFor(userId: string, people: Collaborator[]): string {
   return people.find((person) => person.userId === userId)?.displayName ?? userId.slice(0, 8);
+}
+
+function latestProviderState(events: EventEnvelope[]): string {
+  const lifecycle = [...events].reverse().find((event) =>
+    [
+      "provider.execution_starting",
+      "provider.execution_started",
+      "provider.turn_started",
+      "provider.turn_completed",
+      "provider.execution_completed",
+      "provider.interrupted",
+      "provider.timed_out",
+      "provider.crashed",
+    ].includes(event.type),
+  );
+  if (!lifecycle) return "provisioning";
+  const states: Partial<Record<EventEnvelope["type"], string>> = {
+    "provider.execution_starting": "starting",
+    "provider.execution_started": "ready",
+    "provider.turn_started": "agent running",
+    "provider.turn_completed": "turn complete",
+    "provider.execution_completed": "awaiting steering",
+    "provider.interrupted": "paused",
+    "provider.timed_out": "timed out",
+    "provider.crashed": "interrupted",
+  };
+  return states[lifecycle.type] ?? "active";
+}
+
+function aggregateUsage(events: EventEnvelope[]) {
+  return events
+    .filter((event) => event.type === "provider.usage_reported")
+    .reduce(
+      (total, event) => ({
+        inputTokens: total.inputTokens + Number(event.payload.inputTokens ?? 0),
+        cachedInputTokens:
+          total.cachedInputTokens + Number(event.payload.cachedInputTokens ?? 0),
+        outputTokens: total.outputTokens + Number(event.payload.outputTokens ?? 0),
+      }),
+      { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0 },
+    );
 }

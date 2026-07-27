@@ -1,4 +1,12 @@
-import { Inject, Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from "@nestjs/common";
+import { CodexProvider, type CodexProviderOptions } from "@parallel/codex-provider";
 import type { Actor, EventEnvelope, PendingEvent } from "@parallel/contracts";
 import {
   SimulatedProvider,
@@ -9,17 +17,22 @@ import {
 import { LocalWorkspaceProvider } from "@parallel/workspace-provider";
 import { WorkspaceManager } from "@parallel/workspace-runtime";
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import type { Pool } from "pg";
 import { ulid } from "ulid";
 import { PG_POOL } from "../persistence/database.constants.js";
 import { PostgresEventStore } from "../persistence/postgres-event-store.js";
 
+const execFileAsync = promisify(execFile);
+
 @Injectable()
-export class ProviderOrchestratorService implements OnModuleDestroy {
+export class ProviderOrchestratorService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ProviderOrchestratorService.name);
   private readonly providers: Map<string, AgentProvider>;
   private readonly executions = new Map<string, ProviderExecution>();
   private healthy = true;
+  private readonly instanceId = ulid();
 
   constructor(
     @Inject(PG_POOL) private readonly pool: Pool,
@@ -31,7 +44,83 @@ export class ProviderOrchestratorService implements OnModuleDestroy {
     this.providers = new Map<string, AgentProvider>([
       ["simulator", new SimulatedProvider()],
       ["local-workspace", new LocalWorkspaceProvider(workspaces)],
+      [
+        "codex",
+        new CodexProvider(workspaces, codexProviderOptions()),
+      ],
     ]);
+  }
+
+  async onModuleInit(): Promise<void> {
+    const abandoned = await this.pool.query<{
+      branch_id: string;
+      provider_id: string;
+      provider_execution_id: string | null;
+      process_pid: number | null;
+      last_provider_sequence: string;
+    }>(
+      `SELECT branch_id, provider_id, provider_execution_id, process_pid,
+              last_provider_sequence
+       FROM provider_executions
+       WHERE state IN ('starting', 'running', 'pausing')`,
+    );
+    for (const execution of abandoned.rows) {
+      const processTerminated = execution.process_pid
+        ? await terminateAbandonedProviderProcess(execution.process_pid, execution.provider_id)
+        : false;
+      const causationId =
+        `recovery:${execution.branch_id}:${execution.last_provider_sequence}`;
+      const existing = await this.pool.query(
+        "SELECT 1 FROM events WHERE stream_id = $1 AND causation_id = $2",
+        [execution.branch_id, causationId],
+      );
+      if ((existing.rowCount ?? 0) === 0) {
+        await this.appendWithRetry(execution.branch_id, [{
+          type: "provider.crashed",
+          schemaVersion: 1,
+          actor: { kind: "system", id: "provider-recovery" },
+          causationId,
+          correlationId: causationId,
+          payload: {
+            code: "provider_process_abandoned",
+            message:
+              "The API restarted while the provider process was active; the execution was marked interrupted.",
+            providerExecutionId: execution.provider_execution_id,
+            processTerminated,
+            recoverableConversation: execution.provider_id === "codex",
+          },
+        }]);
+      }
+      await this.pool.query(
+        `UPDATE provider_executions
+         SET state = 'failed', process_pid = NULL, owner_instance_id = NULL,
+             completed_at = now(), last_error_code = 'provider_process_abandoned',
+             updated_at = now()
+         WHERE branch_id = $1`,
+        [execution.branch_id],
+      );
+    }
+  }
+
+  async providerCatalog() {
+    return Promise.all(
+      [...this.providers.values()].map(async (provider) => ({
+        metadata: provider.metadata,
+        capabilities: provider.capabilities,
+        readiness: await provider.readiness(),
+      })),
+    );
+  }
+
+  async requireReady(providerId: string): Promise<void> {
+    const provider = this.providers.get(providerId);
+    if (!provider) throw new BadRequestException(`Unknown provider ${providerId}`);
+    const readiness = await provider.readiness();
+    if (readiness.status !== "ready") {
+      throw new BadRequestException(
+        `${provider.metadata.displayName} is ${readiness.status}: ${readiness.diagnostics.join("; ")}`,
+      );
+    }
   }
 
   async handle(event: EventEnvelope): Promise<void> {
@@ -90,12 +179,13 @@ export class ProviderOrchestratorService implements OnModuleDestroy {
     });
     await this.pool.query(
       `INSERT INTO provider_executions
-        (branch_id, provider_id, provider_execution_id, state)
-       VALUES ($1, $2, $3, 'starting')
+        (branch_id, provider_id, provider_execution_id, state, owner_instance_id)
+       VALUES ($1, $2, $3, 'starting', $4)
        ON CONFLICT (branch_id) DO UPDATE
        SET provider_execution_id = EXCLUDED.provider_execution_id,
-           state = 'starting', updated_at = now()`,
-      [event.streamId, provider.id, execution.id],
+           state = 'starting', owner_instance_id = EXCLUDED.owner_instance_id,
+           updated_at = now()`,
+      [event.streamId, provider.id, execution.id, this.instanceId],
     );
     this.executions.set(event.streamId, execution);
     void this.consume(event.streamId, execution);
@@ -112,15 +202,29 @@ export class ProviderOrchestratorService implements OnModuleDestroy {
       instruction,
       providerExecutionId: execution.id,
     });
-    await execution.steer(instruction, event.id);
+    const receipt = await execution.steer(instruction, event.id);
     await this.appendCanonical(event.streamId, event, "provider.command_dispatched", {
       command: "steer",
       providerExecutionId: execution.id,
+      deliveryModel: receipt.model,
+      state: receipt.state,
     });
-    await this.appendCanonical(event.streamId, event, "steering.dispatched", {
-      proposalId: event.payload.proposalId ?? null,
-      providerExecutionId: execution.id,
-    });
+    await this.appendCanonical(
+      event.streamId,
+      event,
+      receipt.state === "queued"
+        ? "steering.queued"
+        : receipt.state === "rejected"
+          ? "steering.delivery_failed"
+          : "steering.dispatched",
+      {
+        proposalId: event.payload.proposalId ?? null,
+        providerExecutionId: execution.id,
+        deliveryModel: receipt.model,
+        state: receipt.state,
+        ...(receipt.reason ? { reason: receipt.reason } : {}),
+      },
+    );
     await this.markProcessed("provider-orchestrator", event.id);
   }
 
@@ -246,21 +350,58 @@ export class ProviderOrchestratorService implements OnModuleDestroy {
     if (observation.kind === "checkpoint" && canonical) {
       await this.persistCheckpoint(branchId, canonical, observation);
     }
+    const observedAt = validObservedAt(observation.observedAt);
+    const persistenceLatencyMs = Math.max(0, Date.now() - observedAt.getTime());
     await this.pool.query(
       `UPDATE provider_executions
        SET last_provider_sequence = $2,
            state = CASE
-             WHEN $3 = 'started' OR $3 = 'resumed' THEN 'running'
+             WHEN $3 IN ('started', 'turn_started', 'resumed') THEN 'running'
              WHEN $3 = 'paused' THEN 'paused'
              WHEN $3 = 'completed' THEN 'completed'
+             WHEN $3 IN ('cancelled', 'timed_out', 'crashed') THEN 'failed'
              ELSE state
            END,
+           provider_session_id = COALESCE($4, provider_session_id),
+           process_pid = CASE
+             WHEN $3 IN ('cancelled', 'timed_out', 'crashed', 'completed', 'paused')
+               THEN NULL
+             ELSE COALESCE($5, process_pid)
+           END,
+           owner_instance_id = CASE
+             WHEN $3 IN ('cancelled', 'timed_out', 'crashed', 'completed', 'paused')
+               THEN NULL
+             WHEN $3 IN ('started', 'turn_started', 'resumed') THEN $6
+             ELSE owner_instance_id
+           END,
+           process_started_at = CASE
+             WHEN $3 = 'turn_started' THEN now()
+             ELSE process_started_at
+           END,
+           first_output_at = CASE
+             WHEN $7 AND first_output_at IS NULL THEN now()
+             ELSE first_output_at
+           END,
+           completed_at = CASE
+             WHEN $3 IN ('cancelled', 'timed_out', 'crashed', 'completed') THEN now()
+             ELSE completed_at
+           END,
+           last_observed_at = $8,
+           last_persistence_latency_ms = $9,
+           last_error_code = COALESCE($10, last_error_code),
            updated_at = now()
        WHERE branch_id = $1`,
       [
         branchId,
         observation.sequence,
         observation.kind === "status" ? observation.status : null,
+        observation.kind === "status" ? observation.providerSessionId ?? null : null,
+        observation.kind === "status" ? observation.processId ?? null : null,
+        this.instanceId,
+        ["output", "tool", "terminal"].includes(observation.kind),
+        observedAt,
+        persistenceLatencyMs,
+        observation.kind === "error" ? observation.code : null,
       ],
     );
     await this.markProviderObservationProcessed(
@@ -298,8 +439,11 @@ export class ProviderOrchestratorService implements OnModuleDestroy {
     if (!provider) throw new Error(`Unknown provider ${binding.providerId}`);
     const saved = await this.pool.query<{
       last_provider_sequence: string;
+      provider_session_id: string | null;
+      state: string;
     }>(
-      "SELECT last_provider_sequence FROM provider_executions WHERE branch_id = $1",
+      `SELECT last_provider_sequence, provider_session_id, state
+       FROM provider_executions WHERE branch_id = $1`,
       [branchId],
     );
     const recovered = await provider.createExecution({
@@ -309,9 +453,21 @@ export class ProviderOrchestratorService implements OnModuleDestroy {
       initialInstruction: "Recovered Parallel execution",
       idempotencyKey: `recover:${branchId}`,
       observationSequence: Number(saved.rows[0]?.last_provider_sequence ?? 0) + 1,
+      recovery: {
+        ...(saved.rows[0]?.provider_session_id
+          ? { providerSessionId: saved.rows[0].provider_session_id }
+          : {}),
+        state:
+          saved.rows[0]?.state === "paused"
+            ? "paused"
+            : saved.rows[0]?.state === "failed"
+              ? "interrupted"
+              : "idle",
+      },
     });
     this.executions.set(branchId, recovered);
     void this.consume(branchId, recovered);
+    await recovered.start();
     return recovered;
   }
 
@@ -505,15 +661,18 @@ function observationEvents(observation: ProviderObservation, actor: Actor): Pend
     case "status":
       return [{
         ...base,
-        type:
-          observation.status === "started"
-            ? "provider.execution_started"
-            : observation.status === "paused"
-              ? "provider.interrupted"
-              : observation.status === "completed"
-                ? "session.completed"
-                : "session.resumed",
-        payload: { providerSequence: observation.sequence, status: observation.status },
+        type: statusEventType(observation.status),
+        payload: {
+          providerSequence: observation.sequence,
+          status: observation.status,
+          ...(observation.providerSessionId
+            ? { providerSessionId: observation.providerSessionId }
+            : {}),
+          ...(observation.processId !== undefined
+            ? { processId: observation.processId }
+            : {}),
+          ...observationTiming(observation),
+        },
       }];
     case "output":
       return [{
@@ -523,6 +682,7 @@ function observationEvents(observation: ProviderObservation, actor: Actor): Pend
           providerSequence: observation.sequence,
           channel: observation.channel,
           text: observation.text,
+          ...observationTiming(observation),
         },
       }];
     case "tool":
@@ -533,8 +693,28 @@ function observationEvents(observation: ProviderObservation, actor: Actor): Pend
           providerSequence: observation.sequence,
           name: observation.name,
           callId: observation.callId,
+          ...(observation.input !== undefined ? { input: observation.input } : {}),
+          ...(observation.output !== undefined ? { output: observation.output } : {}),
+          ...(observation.exitCode !== undefined ? { exitCode: observation.exitCode } : {}),
+          ...observationTiming(observation),
         },
-      }];
+      }, ...(observation.name === "shell" ? [{
+        ...base,
+        type: observation.phase === "started"
+          ? "terminal.command_started" as const
+          : "terminal.command_completed" as const,
+        payload: {
+          commandId: observation.callId,
+          ...(observation.input !== undefined
+            ? { command: observation.input, executable: "provider-shell" }
+            : {}),
+          ...(observation.output !== undefined ? { output: observation.output } : {}),
+          ...(observation.exitCode !== undefined ? { exitCode: observation.exitCode } : {}),
+          providerSequence: observation.sequence,
+          source: "provider_tool",
+          ...observationTiming(observation),
+        },
+      }] : [])];
     case "artifact": {
       const artifactId = ulid();
       return [{
@@ -623,6 +803,45 @@ function observationEvents(observation: ProviderObservation, actor: Actor): Pend
           providerSequence: observation.sequence,
         },
       }];
+    case "steering":
+      return [{
+        ...base,
+        type:
+          observation.state === "delivered"
+            ? "steering.delivered"
+            : observation.state === "rejected"
+              ? "steering.delivery_failed"
+              : "steering.queued",
+        payload: {
+          commandId: observation.commandId,
+          state: observation.state,
+          deliveryModel: observation.model,
+          ...(observation.reason ? { reason: observation.reason } : {}),
+          providerSequence: observation.sequence,
+        },
+      }];
+    case "usage":
+      return [{
+        ...base,
+        type: "provider.usage_reported",
+        payload: {
+          inputTokens: observation.inputTokens,
+          cachedInputTokens: observation.cachedInputTokens,
+          outputTokens: observation.outputTokens,
+          reasoningOutputTokens: observation.reasoningOutputTokens,
+          providerSequence: observation.sequence,
+        },
+      }];
+    case "warning":
+      return [{
+        ...base,
+        type: "provider.warning",
+        payload: {
+          code: observation.code,
+          message: observation.message,
+          providerSequence: observation.sequence,
+        },
+      }];
     case "error":
       return [{
         ...base,
@@ -633,6 +852,32 @@ function observationEvents(observation: ProviderObservation, actor: Actor): Pend
           providerSequence: observation.sequence,
         },
       }];
+  }
+}
+
+function statusEventType(
+  status: Extract<ProviderObservation, { kind: "status" }>["status"],
+): PendingEvent["type"] {
+  switch (status) {
+    case "starting":
+      return "provider.execution_starting";
+    case "started":
+      return "provider.execution_started";
+    case "turn_started":
+      return "provider.turn_started";
+    case "turn_completed":
+      return "provider.turn_completed";
+    case "paused":
+    case "cancelled":
+      return "provider.interrupted";
+    case "resumed":
+      return "session.resumed";
+    case "completed":
+      return "provider.execution_completed";
+    case "timed_out":
+      return "provider.timed_out";
+    case "crashed":
+      return "provider.crashed";
   }
 }
 
@@ -685,4 +930,55 @@ function toEventEnvelope(row: EventRow): EventEnvelope {
     occurredAt: row.occurred_at.toISOString(),
     payload: row.payload,
   };
+}
+
+function numericEnvironment(name: string): number | undefined {
+  const raw = process.env[name];
+  if (!raw) return undefined;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) throw new Error(`${name} must be numeric`);
+  return value;
+}
+
+function codexProviderOptions(): CodexProviderOptions {
+  const maxExecutionMs = numericEnvironment("CODEX_MAX_EXECUTION_MS");
+  const maxOutputBytes = numericEnvironment("CODEX_MAX_OUTPUT_BYTES");
+  const maxArtifactBytes = numericEnvironment("CODEX_MAX_ARTIFACT_BYTES");
+  return {
+    ...(process.env.CODEX_EXECUTABLE
+      ? { executable: process.env.CODEX_EXECUTABLE }
+      : {}),
+    ...(maxExecutionMs !== undefined ? { maxExecutionMs } : {}),
+    ...(maxOutputBytes !== undefined ? { maxOutputBytes } : {}),
+    ...(maxArtifactBytes !== undefined ? { maxArtifactBytes } : {}),
+  };
+}
+
+function validObservedAt(value: string | undefined): Date {
+  const parsed = value ? new Date(value) : new Date();
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+function observationTiming(
+  observation: ProviderObservation,
+): { providerObservedAt?: string } {
+  return observation.observedAt ? { providerObservedAt: observation.observedAt } : {};
+}
+
+async function terminateAbandonedProviderProcess(
+  pid: number,
+  providerId: string,
+): Promise<boolean> {
+  if (!Number.isInteger(pid) || pid <= 1) return false;
+  try {
+    const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", "command="], {
+      timeout: 2_000,
+    });
+    const command = String(stdout).trim();
+    if (!command || !command.toLowerCase().includes(providerId.toLowerCase())) return false;
+    process.kill(process.platform === "win32" ? pid : -pid, "SIGTERM");
+    return true;
+  } catch {
+    return false;
+  }
 }

@@ -38,6 +38,8 @@ describe("collaborative execution vertical slice", () => {
   });
 
   it("runs one provider execution with two authenticated collaborators", async () => {
+    const unauthenticatedProviders = await fetch(`${baseUrl}/v1/providers`);
+    expect(unauthenticatedProviders.status).toBe(401);
     const alice = await signIn("alice@test.local", "Alice");
     const bob = await signIn("bob@test.local", "Bob");
     const viewer = await signIn("viewer@test.local", "Viewer");
@@ -47,6 +49,26 @@ describe("collaborative execution vertical slice", () => {
       "/v1/organizations",
       alice.token,
       { method: "POST", body: { name: "Acme", slug: "acme-e2e" } },
+    );
+    const providers = await json<
+      Array<{
+        metadata: { id: string };
+        readiness: { status: string };
+        capabilities: { schemaVersion: number; steering: string };
+      }>
+    >("/v1/providers", alice.token);
+    expect(providers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: expect.objectContaining({ id: "simulator" }),
+          readiness: expect.objectContaining({ status: "ready" }),
+          capabilities: expect.objectContaining({ schemaVersion: 1 }),
+        }),
+        expect.objectContaining({
+          metadata: expect.objectContaining({ id: "codex" }),
+          capabilities: expect.objectContaining({ steering: "continuation" }),
+        }),
+      ]),
     );
     await json("/v1/organizations/join", bob.token, {
       method: "POST",
@@ -199,6 +221,55 @@ describe("collaborative execution vertical slice", () => {
     );
     await waitFor(() => aliceEvents.length >= durableEvents.length - 2);
     await waitFor(() => bobEvents.some((event) => event.type === "session.paused"));
+
+    const recoveryTarget = await json<{ branchId: string }>(
+      "/v1/sessions",
+      alice.token,
+      {
+        method: "POST",
+        body: {
+          organizationId: organization.id,
+          title: "Restart recovery target",
+          providerId: "simulator",
+        },
+      },
+    );
+    await waitFor(async () => {
+      const result = await pool.query<{ state: string }>(
+        "SELECT state FROM provider_executions WHERE branch_id = $1",
+        [recoveryTarget.branchId],
+      );
+      return result.rows[0]?.state === "running";
+    });
+
+    sockets.forEach((socket) => socket.disconnect());
+    await app.close();
+    const restartedModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = restartedModule.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+    app.useGlobalFilters(new DomainExceptionFilter());
+    await app.listen(0);
+    baseUrl = await app.getUrl();
+
+    const replayedAfterRestart = await json<EventEnvelope[]>(
+      `/v1/branches/${created.branchId}/events?after=0`,
+      alice.token,
+    );
+    expect(replayedAfterRestart.map((event) => event.id)).toEqual(
+      expect.arrayContaining(durableEvents.map((event) => event.id)),
+    );
+    const recoveryEvents = await json<EventEnvelope[]>(
+      `/v1/branches/${recoveryTarget.branchId}/events?after=0`,
+      alice.token,
+    );
+    expect(recoveryEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "provider.crashed",
+          payload: expect.objectContaining({ code: "provider_process_abandoned" }),
+        }),
+      ]),
+    );
   }, 20_000);
 
   async function signIn(email: string, displayName: string) {

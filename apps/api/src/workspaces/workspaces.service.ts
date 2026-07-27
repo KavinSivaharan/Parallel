@@ -108,6 +108,7 @@ export class WorkspacesService {
     checkpointId: string,
     principal: AuthPrincipal,
     idempotencyKey: string,
+    objective = "Continue from the forked checkpoint with an independent approach.",
   ): Promise<{ branchId: string; events: EventEnvelope[] }> {
     if (!idempotencyKey) throw new TypeError("Idempotency-Key header is required");
     const access = await this.organizations.requireSessionAccess(branchId, principal.userId);
@@ -167,7 +168,7 @@ export class WorkspacesService {
         ...meta,
         payload: {
           providerId: source.rows[0].provider_id,
-          initialInstruction: "Continue from forked checkpoint",
+          initialInstruction: objective,
           parentWorkspaceId: branchId,
           parentCheckpoint: checkpointId,
         },

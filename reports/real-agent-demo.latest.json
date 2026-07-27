@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-27T14:45:20.018Z",
+  "environment": {
+    "provider": "codex",
+    "providerVersion": "codex-cli 0.146.0-alpha.3.1",
+    "fixture": "demo/fixtures/ledger-service",
+    "localTrustedExecution": true
+  },
+  "execution": {
+    "sessionId": "01KYJ0CWWKNESWY08DMSJ516EN",
+    "branchId": "01KYJ0CWWKPYGRWKC98MGFMPXK",
+    "providerExecutionIds": [
+      "codex-01KYJ0CWWKPYGRWKC98MGFMPXK"
+    ],
+    "checkpoint": {
+      "id": "f04bcd48-1ea6-4748-9c94-bdec771444f3",
+      "commit": "fcad089ee394d1f2b08409de803a82657532648e"
+    },
+    "forkBranchId": "fork_107f1e611aba83d22ded7070bd",
+    "parentEventCount": 128,
+    "forkOwnEventCount": 40,
+    "replayEventCount": 128,
+    "artifactCount": 6,
+    "artifactBytes": 16046,
+    "eventBytes": 129417
+  },
+  "assertions": {
+    "twoAuthenticatedUsers": true,
+    "oneSharedLogicalExecution": true,
+    "realShellAndFileEdits": true,
+    "nonDriverProposalApproved": true,
+    "continuationSteeringDelivered": true,
+    "driverTransferred": true,
+    "checkpointIsGitCommit": true,
+    "forkIndependent": true,
+    "emergencyCancellationObserved": true,
+    "replayRecovered": true
+  },
+  "metrics": {
+    "commandAcceptanceToProcessStartMs": 180,
+    "timeToFirstProviderOutputMs": 5242,
+    "steeringApprovalToDeliveryMs": 81989,
+    "providerEventPersistenceLatencyMs": 14,
+    "websocketFanoutLatencyMs": {
+      "samples": 252,
+      "median": 161,
+      "p95": 271
+    },
+    "totalDemoDurationMs": 206386,
+    "providerTurnDurationsMs": [
+      82098,
+      37007,
+      23437
+    ],
+    "cancellationLatencyMs": 272,
+    "replayReconstructionMs": 6
+  },
+  "limitations": [
+    "Local measurements are a single machine run, not universal performance claims.",
+    "WebSocket latency is measured from durable event occurrence to client receipt and includes outbox dispatch.",
+    "A host crash interrupts the active Codex process; Parallel persists prior events and can later continue the stored Codex conversation, but does not reattach to the vanished process.",
+    "The checkpoint and fork clone Git workspace state and inherited Parallel history, not hidden provider state."
+  ]
+}

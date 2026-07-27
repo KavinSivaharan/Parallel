@@ -27,6 +27,7 @@ export class SessionsController {
     @Body() body: {
       organizationId: string;
       title: string;
+      objective?: string;
       providerId?: string;
       repositoryUrl?: string;
       baseRef?: string;
@@ -36,6 +37,7 @@ export class SessionsController {
       principal,
       organizationId: body.organizationId,
       title: body.title,
+      objective: body.objective?.trim() || body.title,
       providerId: body.providerId ?? "local-workspace",
       ...(body.repositoryUrl ? { repositoryUrl: body.repositoryUrl } : {}),
       ...(body.baseRef ? { baseRef: body.baseRef } : {}),

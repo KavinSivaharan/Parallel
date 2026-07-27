@@ -90,8 +90,15 @@ export class WorkspacesController {
     @Param("checkpointId") checkpointId: string,
     @Principal() principal: AuthPrincipal,
     @Headers("idempotency-key") key: string,
+    @Body() body: { objective?: string } = {},
   ) {
-    return this.workspaces.fork(branchId, checkpointId, principal, key);
+    return this.workspaces.fork(
+      branchId,
+      checkpointId,
+      principal,
+      key,
+      body.objective?.trim() || "Continue from the forked checkpoint with an independent approach.",
+    );
   }
 
   @Get("branches/:branchId/replay")
