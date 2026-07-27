@@ -18,7 +18,7 @@ describe("SimulatedProvider", () => {
 
     const observed = [];
     for await (const item of execution.observations()) observed.push(item);
-    expect(observed).toHaveLength(5);
-    expect(observed.map((item) => item.sequence)).toEqual([1, 2, 3, 4, 5]);
+    expect(observed).toHaveLength(6);
+    expect(observed.map((item) => item.sequence)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 });

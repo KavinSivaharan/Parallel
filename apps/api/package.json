@@ -18,6 +18,7 @@
     "@nestjs/websockets": "^11.1.6",
     "@socket.io/redis-adapter": "^8.3.0",
     "@parallel/contracts": "workspace:*",
+    "@parallel/codex-provider": "workspace:*",
     "@parallel/domain": "workspace:*",
     "@parallel/provider-sdk": "workspace:*",
     "@parallel/workspace-provider": "workspace:*",

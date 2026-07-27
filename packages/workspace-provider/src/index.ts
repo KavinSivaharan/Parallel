@@ -4,7 +4,10 @@ import type {
   ProviderCapabilities,
   ProviderExecution,
   ProviderObservation,
+  ProviderReadiness,
+  SteeringReceipt,
 } from "@parallel/provider-sdk";
+import { defineCapabilities } from "@parallel/provider-sdk";
 import {
   WorkspaceManager,
   type RuntimeEvent,
@@ -14,16 +17,45 @@ type ObservationInput<T> = T extends unknown ? Omit<T, "id" | "sequence"> : neve
 
 export class LocalWorkspaceProvider implements AgentProvider {
   readonly id = "local-workspace";
-  readonly capabilities: ProviderCapabilities = {
-    pause: true,
-    resume: true,
-    checkpoint: true,
-    toolApproval: false,
-    filesystemArtifacts: true,
-    shellExecution: true,
+  readonly metadata = {
+    id: this.id,
+    displayName: "Local Workspace Runtime",
+    adapterVersion: "1.0.0",
+    providerVersion: process.version,
   };
+  readonly capabilities: ProviderCapabilities = defineCapabilities({
+    schemaVersion: 1,
+    startExecution: true,
+    steering: "none",
+    interactiveInput: false,
+    pause: "interrupt_current",
+    resume: "continuation",
+    cancel: true,
+    persistentConversation: false,
+    reconnect: "workspace_only",
+    checkpointAwareness: "workspace",
+    shellExecution: true,
+    filesystemEvents: true,
+    artifactOutput: true,
+    toolCallVisibility: "structured",
+    structuredEventOutput: true,
+    usageReporting: false,
+    workspaceOwnership: "parallel",
+    concurrentExecutions: true,
+  });
 
   constructor(private readonly workspaces: WorkspaceManager) {}
+
+  async readiness(): Promise<ProviderReadiness> {
+    return {
+      status: "ready",
+      checkedAt: new Date().toISOString(),
+      executable: process.execPath,
+      providerVersion: process.version,
+      authentication: "ready",
+      diagnostics: ["Trusted local execution only; not a security sandbox"],
+    };
+  }
 
   async createExecution(request: CreateExecutionRequest): Promise<ProviderExecution> {
     const metadata =
@@ -80,8 +112,13 @@ class LocalWorkspaceExecution implements ProviderExecution {
     this.push({ kind: "status", status: "started" });
   }
 
-  async steer(): Promise<void> {
-    throw new Error("Local workspace runtime accepts structured commands, not natural-language steering");
+  async steer(): Promise<SteeringReceipt> {
+    return {
+      state: "rejected",
+      model: "none",
+      providerExecutionId: this.id,
+      reason: "Local workspace runtime accepts structured commands, not natural-language steering",
+    };
   }
 
   async executeCommand(
@@ -153,6 +190,11 @@ class LocalWorkspaceExecution implements ProviderExecution {
     this.push({ kind: "status", status: "resumed" });
   }
 
+  async cancel(): Promise<void> {
+    this.activeAbort?.abort();
+    this.push({ kind: "status", status: "cancelled" });
+  }
+
   async checkpoint(summary?: string): Promise<{ providerState: string }> {
     this.enqueue(async () => {
       const checkpoint = await this.workspaces.checkpoint(
@@ -216,6 +258,7 @@ class LocalWorkspaceExecution implements ProviderExecution {
       ...input,
       id: `${this.id}:${sequence}`,
       sequence,
+      observedAt: new Date().toISOString(),
     } as ProviderObservation);
     this.wake();
   }

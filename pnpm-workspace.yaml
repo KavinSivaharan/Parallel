@@ -1,4 +1,12 @@
 packages:
   - apps/*
   - packages/*
-
+allowBuilds:
+  esbuild: set this to true or false
+  sharp: set this to true or false
+allowBuilds:
+  esbuild: true
+  sharp: true
+overrides:
+  rollup: 4.62.2
+  baseline-browser-mapping: 2.11.3

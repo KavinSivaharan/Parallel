@@ -1,5 +1,5 @@
 {
-  "name": "@parallel/provider-sdk",
+  "name": "@parallel/codex-provider",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -18,6 +18,12 @@
     "test": "vitest run",
     "lint": "tsc -p tsconfig.json --noEmit"
   },
-  "dependencies": { "zod": "^4.0.17" },
-  "devDependencies": { "vitest": "^3.2.4" }
+  "dependencies": {
+    "@parallel/provider-sdk": "workspace:*",
+    "@parallel/workspace-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "vitest": "^3.2.4"
+  }
 }
