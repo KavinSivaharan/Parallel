@@ -35,6 +35,7 @@ flowchart TB
 - [ADR 0003: realtime delivery](decisions/0003-realtime-delivery.md)
 - [ADR 0004: development identity boundary](decisions/0004-development-identity-boundary.md)
 - [ADR 0005: at-least-once outbox](decisions/0005-at-least-once-outbox.md)
+- [ADR 0006: workspace execution backend](decisions/0006-workspace-execution-backend.md)
 - [Event model](event-model.md)
 - [Database model](database.md)
 - [Provider protocol](provider-protocol.md)
