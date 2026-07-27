@@ -148,9 +148,9 @@ export class WorkspaceManager {
     targetWorkspaceId: string,
   ): Promise<WorkspaceMetadata> {
     const source = await this.metadata(sourceWorkspaceId);
-    const checkpoint = (await this.checkpoints(sourceWorkspaceId)).find(
-      (item) => item.id === checkpointId,
-    );
+    const sourceHistory = await this.checkpoints(sourceWorkspaceId);
+    const checkpointIndex = sourceHistory.findIndex((item) => item.id === checkpointId);
+    const checkpoint = sourceHistory[checkpointIndex];
     if (!checkpoint) throw new Error(`Checkpoint ${checkpointId} not found`);
     const target = this.paths(targetWorkspaceId);
     if (await exists(target.metadata)) return this.metadata(targetWorkspaceId);
@@ -172,7 +172,12 @@ export class WorkspaceManager {
       parentCheckpoint: checkpointId,
     };
     await writeJson(target.metadata, metadata);
-    await writeJson(target.checkpoints, [{ ...checkpoint, workspaceId: targetWorkspaceId }]);
+    await writeJson(
+      target.checkpoints,
+      sourceHistory
+        .slice(0, checkpointIndex + 1)
+        .map((item) => ({ ...item, workspaceId: targetWorkspaceId })),
+    );
     await writeJson(target.artifacts, []);
     return metadata;
   }

@@ -35,6 +35,7 @@ export class ProcessRunner {
     let finished = false;
     let exitCode: number | null = null;
     let exitSignal: NodeJS.Signals | null = null;
+    let forceKillTimer: NodeJS.Timeout | undefined;
 
     const push = (event: RuntimeEvent): void => {
       queue.push(event);
@@ -61,10 +62,13 @@ export class ProcessRunner {
 
     const abort = (): void => {
       terminate(child.pid, "SIGTERM");
+      forceKillTimer ??= setTimeout(() => terminate(child.pid, "SIGKILL"), 2_000);
+      forceKillTimer.unref();
     };
     signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
     const timeout = request.timeoutMs
-      ? setTimeout(() => terminate(child.pid, "SIGTERM"), request.timeoutMs)
+      ? setTimeout(abort, request.timeoutMs)
       : undefined;
     timeout?.unref();
 
@@ -77,6 +81,7 @@ export class ProcessRunner {
     } finally {
       signal?.removeEventListener("abort", abort);
       if (timeout) clearTimeout(timeout);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
       if (!finished) terminate(child.pid, "SIGKILL");
     }
     yield {

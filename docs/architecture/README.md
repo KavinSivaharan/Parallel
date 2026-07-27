@@ -8,7 +8,9 @@ flowchart TB
   edge --> app[Collaboration application layer]
   app --> domain[Event-sourced session domain]
   app --> adapters[Provider adapter port]
-  adapters --> providers[Claude Code / Codex / Devin / simulator]
+  adapters --> providers[Claude Code / Codex / Devin / local workspace]
+  providers --> runtime[Replaceable workspace runtime]
+  runtime --> processes[Processes / filesystem / Git]
   domain --> pg[(PostgreSQL event store)]
   app --> redis[(Redis presence and fan-out)]
   app --> objects[(Object storage artifacts)]
@@ -36,8 +38,11 @@ flowchart TB
 - [ADR 0004: development identity boundary](decisions/0004-development-identity-boundary.md)
 - [ADR 0005: at-least-once outbox](decisions/0005-at-least-once-outbox.md)
 - [ADR 0006: workspace execution backend](decisions/0006-workspace-execution-backend.md)
+- [ADR 0007: commit checkpoints and reference forks](decisions/0007-commit-checkpoints-and-reference-forks.md)
+- [ADR 0008: command concurrency during provider streaming](decisions/0008-command-concurrency-during-streaming.md)
 - [Event model](event-model.md)
 - [Database model](database.md)
 - [Provider protocol](provider-protocol.md)
+- [Workspace runtime](workspace-runtime.md)
 - [Collaborative execution loop](collaborative-loop.md)
 - [API](../api.md)

@@ -186,7 +186,18 @@ export class ProviderOrchestratorService implements OnModuleDestroy {
   private async consume(branchId: string, execution: ProviderExecution): Promise<void> {
     try {
       for await (const observation of execution.observations()) {
-        await this.acceptObservation(branchId, execution.id, observation);
+        let accepted = false;
+        for (let attempt = 0; attempt < 8 && !accepted; attempt += 1) {
+          try {
+            await this.acceptObservation(branchId, execution.id, observation);
+            accepted = true;
+          } catch (error) {
+            if (attempt === 7) throw error;
+            await new Promise((resolve) =>
+              setTimeout(resolve, Math.min(2_000, 100 * 2 ** attempt)),
+            );
+          }
+        }
       }
     } catch (error) {
       this.healthy = false;
@@ -205,19 +216,30 @@ export class ProviderOrchestratorService implements OnModuleDestroy {
       [branchId],
     );
     const last = Number(current.rows[0]?.last_provider_sequence ?? 0);
-    if (observation.sequence <= last) return;
+    if (observation.sequence <= last) {
+      await this.markProviderObservationProcessed(
+        providerExecutionId,
+        observation.id,
+        observation.sequence,
+      );
+      return;
+    }
     if (observation.sequence !== last + 1) {
       throw new Error(`Provider observation gap: expected ${last + 1}, got ${observation.sequence}`);
     }
 
     const actor: Actor = { kind: "provider", id: providerExecutionId };
-    const pending = observationEvents(observation, actor);
-    const result = await this.appendWithRetry(branchId, pending);
-    const artifactEvent = result.events.find((item) => item.type === "artifact.created");
+    const canonicalEvents = await this.canonicalEvents(
+      branchId,
+      providerExecutionId,
+      observation,
+      actor,
+    );
+    const artifactEvent = canonicalEvents.find((item) => item.type === "artifact.created");
     if (observation.kind === "artifact" && artifactEvent) {
       await this.persistArtifact(branchId, artifactEvent, observation);
     }
-    const canonical = result.events[0];
+    const canonical = canonicalEvents[0];
     if (observation.kind === "workspace" && canonical) {
       await this.persistWorkspace(branchId, providerExecutionId, observation);
     }
@@ -246,6 +268,26 @@ export class ProviderOrchestratorService implements OnModuleDestroy {
       observation.id,
       observation.sequence,
     );
+  }
+
+  private async canonicalEvents(
+    branchId: string,
+    providerExecutionId: string,
+    observation: ProviderObservation,
+    actor: Actor,
+  ): Promise<EventEnvelope[]> {
+    const existing = await this.pool.query<EventRow>(
+      `SELECT id, stream_id, sequence, type, schema_version, actor, causation_id,
+              correlation_id, occurred_at, payload
+       FROM events
+       WHERE stream_id = $1
+         AND causation_id = $2
+         AND actor->>'id' = $3
+       ORDER BY sequence`,
+      [branchId, observation.id, providerExecutionId],
+    );
+    if (existing.rows.length > 0) return existing.rows.map(toEventEnvelope);
+    return (await this.appendWithRetry(branchId, observationEvents(observation, actor))).events;
   }
 
   private async requireExecution(branchId: string): Promise<ProviderExecution> {
@@ -615,4 +657,32 @@ function isStringRecord(value: unknown): value is Record<string, string> {
     !Array.isArray(value) &&
     Object.values(value).every((item) => typeof item === "string")
   );
+}
+
+interface EventRow {
+  id: string;
+  stream_id: string;
+  sequence: string;
+  type: EventEnvelope["type"];
+  schema_version: number;
+  actor: Actor;
+  causation_id: string;
+  correlation_id: string;
+  occurred_at: Date;
+  payload: Record<string, unknown>;
+}
+
+function toEventEnvelope(row: EventRow): EventEnvelope {
+  return {
+    id: row.id,
+    streamId: row.stream_id,
+    sequence: Number(row.sequence),
+    type: row.type,
+    schemaVersion: row.schema_version,
+    actor: row.actor,
+    causationId: row.causation_id,
+    correlationId: row.correlation_id,
+    occurredAt: row.occurred_at.toISOString(),
+    payload: row.payload,
+  };
 }

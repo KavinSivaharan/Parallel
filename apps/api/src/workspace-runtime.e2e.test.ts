@@ -29,12 +29,7 @@ describe("real workspace runtime vertical slice", () => {
        consumer_inbox, provider_observation_inbox, idempotency_keys, outbox,
        events, event_streams CASCADE`,
     );
-    const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = module.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
-    app.useGlobalFilters(new DomainExceptionFilter());
-    await app.listen(0);
-    baseUrl = await app.getUrl();
+    await startApplication();
   });
 
   afterAll(async () => {
@@ -174,9 +169,19 @@ describe("real workspace runtime vertical slice", () => {
     await waitForValue(() =>
       request(`/v1/branches/${fork.branchId}/workspace`, auth.token).catch(() => null),
     );
+    expect(
+      await request<Array<{ id: string }>>(
+        `/v1/branches/${fork.branchId}/checkpoints`,
+        auth.token,
+      ),
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ id: checkpoint.id })]));
     const replay = await request<{
       events: Array<EventEnvelope & { replaySequence: number; originBranchId: string }>;
       artifacts: Array<{ id: string; name: string }>;
+      reconstructed: {
+        workspace: Record<string, unknown>;
+        terminal: Array<{ stream: string; chunk: string }>;
+      };
     }>(`/v1/branches/${fork.branchId}/replay`, auth.token);
     expect(replay.events.map((event) => event.replaySequence)).toEqual(
       replay.events.map((_event, index) => index + 1),
@@ -188,7 +193,35 @@ describe("real workspace runtime vertical slice", () => {
         expect.objectContaining({ type: "session.forked", originBranchId: fork.branchId }),
       ]),
     );
-    expect(replay.artifacts.some((artifact) => artifact.name.endsWith(".log"))).toBe(true);
+    expect(replay.artifacts.filter((artifact) => artifact.name.endsWith(".log"))).toHaveLength(1);
+    expect(replay.reconstructed.workspace.workspaceId).toBe(fork.branchId);
+    expect(replay.reconstructed.terminal).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ stream: "stdout", chunk: "workspace-output\n" }),
+        expect.objectContaining({ stream: "stderr", chunk: "workspace-warning\n" }),
+      ]),
+    );
+
+    await app.close();
+    await startApplication();
+    state = await getState(session.branchId, auth.token);
+    await request(`/v1/branches/${session.branchId}/workspace/commands`, auth.token, {
+      method: "POST",
+      idempotencyKey: "post-restart-command",
+      body: {
+        expectedVersion: state.version,
+        executable: process.execPath,
+        args: [
+          "-e",
+          "const fs=require('fs'); if(fs.readFileSync('runtime.txt','utf8')!=='version-one') process.exit(2); fs.writeFileSync('recovered.txt','durable')",
+        ],
+      },
+    });
+    await waitFor(async () =>
+      readFile(join(workspace.repository_path, "recovered.txt"), "utf8")
+        .then((value) => value === "durable")
+        .catch(() => false),
+    );
 
     state = await getState(session.branchId, auth.token);
     await request(`/v1/branches/${session.branchId}/workspace/commands`, auth.token, {
@@ -234,6 +267,15 @@ describe("real workspace runtime vertical slice", () => {
 
   function getEvents(branchId: string, token: string): Promise<EventEnvelope[]> {
     return request(`/v1/branches/${branchId}/events?after=0`, token);
+  }
+
+  async function startApplication(): Promise<void> {
+    const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = module.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+    app.useGlobalFilters(new DomainExceptionFilter());
+    await app.listen(0);
+    baseUrl = await app.getUrl();
   }
 
   async function request<T>(

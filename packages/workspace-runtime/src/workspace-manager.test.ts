@@ -76,6 +76,32 @@ describe("WorkspaceManager", () => {
     await expect(readFile(join(b.repositoryPath, "only-a"), "utf8")).rejects.toThrow();
     await expect(readFile(join(a.repositoryPath, "only-b"), "utf8")).rejects.toThrow();
   });
+
+  it("escalates cancellation for commands that ignore graceful termination", async () => {
+    const manager = await createManager();
+    await manager.create({ id: "workspace-cancel" });
+    const controller = new AbortController();
+    const events = [];
+    const startedAt = Date.now();
+    for await (const event of manager.execute(
+      "workspace-cancel",
+      {
+        executable: process.execPath,
+        args: [
+          "-e",
+          "process.on('SIGTERM',()=>{}); console.log('ready'); setInterval(()=>{},1000)",
+        ],
+      },
+      controller.signal,
+    )) {
+      events.push(event);
+      if (event.kind === "command.stdout") controller.abort();
+    }
+    expect(events).toContainEqual(
+      expect.objectContaining({ kind: "command.completed", signal: "SIGKILL" }),
+    );
+    expect(Date.now() - startedAt).toBeLessThan(3_500);
+  }, 5_000);
 });
 
 async function createManager(): Promise<WorkspaceManager> {
@@ -89,4 +115,3 @@ async function drain(iterable: AsyncIterable<unknown>): Promise<void> {
     // Drain streaming execution.
   }
 }
-

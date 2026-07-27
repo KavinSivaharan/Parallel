@@ -19,16 +19,29 @@ Initial domain events:
 
 - `session.created`, `session.started`, `session.paused`, `session.resumed`, `session.completed`
 - `execution.requested`, `execution.pause_requested`
+- `workspace.command_requested`, `workspace.created`
+- `terminal.command_started`, `terminal.stdout`, `terminal.stderr`, `terminal.command_completed`
+- `filesystem.changed`, `git.diff_created`
 - `participant.joined`, `participant.left`
 - `driver.claimed`, `driver.transferred`, `driver.released`
 - `comment.created`
 - `steering.proposed`, `steering.approved`, `steering.rejected`, `steering.dispatched`
-- `checkpoint.created`, `session.forked`
+- `checkpoint.requested`, `checkpoint.created`, `checkpoint.restore_requested`, `checkpoint.restored`
+- `session.forked`
 - `provider.execution_started`, `provider.output_observed`, `provider.tool_started`, `provider.tool_completed`, `provider.interrupted`
 - `provider.command_queued`, `provider.command_dispatched`, `provider.output_received`, `provider.failed`
 - `artifact.created`
 
 Provider output can be high volume. It remains durable, but large binary bodies live in object storage and events contain content-addressed references.
+
+## Deterministic fork replay
+
+A fork stream stores `parent_branch_id` and `parent_checkpoint_id`. Replay walks
+the parent chain, truncates each parent at the referenced
+`checkpoint.created`, then appends the child stream. Replay sequence numbers are
+derived from that flattened immutable history. Artifact inclusion is derived
+from `artifact.created` IDs in the same truncated history, preventing a fork
+from observing artifacts produced after its branch point.
 
 ## Delivery operations
 

@@ -38,3 +38,19 @@ ALTER TABLE workspaces
 
 CREATE INDEX IF NOT EXISTS checkpoints_branch_idx
   ON checkpoints (branch_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS events_stream_causation_idx
+  ON events (stream_id, causation_id);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'session_branches_parent_checkpoint_fk'
+  ) THEN
+    ALTER TABLE session_branches
+      ADD CONSTRAINT session_branches_parent_checkpoint_fk
+      FOREIGN KEY (parent_checkpoint_id) REFERENCES checkpoints(id);
+  END IF;
+END
+$$;

@@ -41,14 +41,7 @@ export class WorkspacesService {
 
   async checkpoints(branchId: string, principal: AuthPrincipal) {
     await this.organizations.requireSessionAccess(branchId, principal.userId);
-    return (
-      await this.pool.query(
-        `SELECT id, workspace_id, commit_hash, parent_commit_hash, parent_checkpoint_id, summary,
-                created_at, restored_at
-         FROM checkpoints WHERE branch_id = $1 ORDER BY created_at`,
-        [branchId],
-      )
-    ).rows;
+    return this.checkpointHistory(branchId);
   }
 
   async compareCheckpoints(
@@ -128,11 +121,10 @@ export class WorkspacesService {
        WHERE b.id = $1`,
       [branchId],
     );
-    const checkpoint = await this.pool.query(
-      "SELECT 1 FROM checkpoints WHERE id = $1 AND branch_id = $2",
-      [checkpointId, branchId],
+    const checkpointExists = (await this.checkpointHistory(branchId)).some(
+      (checkpoint) => checkpoint.id === checkpointId,
     );
-    if (!source.rows[0] || !checkpoint.rows[0]) throw new NotFoundException("Checkpoint not found");
+    if (!source.rows[0] || !checkpointExists) throw new NotFoundException("Checkpoint not found");
     const forkBranchId = deterministicForkId(branchId, principal.userId, idempotencyKey);
     const existing = await this.pool.query<{
       parent_branch_id: string | null;
@@ -213,7 +205,20 @@ export class WorkspacesService {
       branchId,
       eventCount: events.length,
       events: events.map((item, index) => ({ ...item, replaySequence: index + 1 })),
-      artifacts,
+      artifacts: artifacts.map((artifact) => ({
+        id: artifact.id,
+        branchId: artifact.branch_id,
+        name: artifact.name,
+        mediaType: artifact.media_type,
+        contentHash: artifact.content_hash,
+        byteSize: Number(artifact.byte_size),
+        version: artifact.version,
+        createdByEventId: artifact.created_by_event_id,
+        createdAt:
+          artifact.created_at instanceof Date
+            ? artifact.created_at.toISOString()
+            : String(artifact.created_at),
+      })),
       reconstructed: reconstructReplay(events),
     };
   }
@@ -275,6 +280,35 @@ export class WorkspacesService {
       ...event,
       originBranchId: branchId,
     }));
+    return [...inherited, ...own];
+  }
+
+  private async checkpointHistory(branchId: string): Promise<Record<string, unknown>[]> {
+    const branch = await this.pool.query<{
+      parent_branch_id: string | null;
+      parent_checkpoint_id: string | null;
+    }>(
+      "SELECT parent_branch_id, parent_checkpoint_id FROM session_branches WHERE id = $1",
+      [branchId],
+    );
+    const row = branch.rows[0];
+    if (!row) throw new NotFoundException("Branch not found");
+    let inherited: Record<string, unknown>[] = [];
+    if (row.parent_branch_id && row.parent_checkpoint_id) {
+      inherited = await this.checkpointHistory(row.parent_branch_id);
+      const cutoff = inherited.findIndex(
+        (checkpoint) => checkpoint.id === row.parent_checkpoint_id,
+      );
+      if (cutoff >= 0) inherited = inherited.slice(0, cutoff + 1);
+    }
+    const own = (
+      await this.pool.query(
+        `SELECT id, workspace_id, commit_hash, parent_commit_hash, parent_checkpoint_id,
+                summary, created_at, restored_at
+         FROM checkpoints WHERE branch_id = $1 ORDER BY created_at`,
+        [branchId],
+      )
+    ).rows as Record<string, unknown>[];
     return [...inherited, ...own];
   }
 }
