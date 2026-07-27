@@ -28,6 +28,7 @@ corepack enable
 pnpm install
 cp .env.example .env
 docker compose up -d
+pnpm db:migrate
 pnpm dev
 ```
 
@@ -43,3 +44,6 @@ pnpm build
 
 See [docs/architecture/README.md](docs/architecture/README.md) for the system design and decision records.
 
+Development sign-in is intentionally local-only and is disabled when
+`NODE_ENV=production`. It exercises the same bearer-token and organization
+authorization boundary that a production OIDC verifier will implement.

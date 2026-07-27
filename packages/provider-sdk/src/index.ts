@@ -1,8 +1,12 @@
-export type ProviderObservation =
+export type ProviderObservation = {
+  id: string;
+  sequence: number;
+} & (
   | { kind: "status"; status: "started" | "paused" | "resumed" | "completed" }
   | { kind: "output"; channel: "analysis" | "commentary" | "final"; text: string }
   | { kind: "tool"; phase: "started" | "completed"; name: string; callId: string }
-  | { kind: "artifact"; mediaType: string; name: string; bytes: Uint8Array };
+  | { kind: "artifact"; mediaType: string; name: string; bytes: Uint8Array }
+);
 
 export interface ProviderCapabilities {
   pause: boolean;
@@ -17,6 +21,7 @@ export interface CreateExecutionRequest {
   branchId: string;
   workspaceRef: string;
   initialInstruction: string;
+  idempotencyKey: string;
 }
 
 export interface ProviderExecution {
@@ -37,4 +42,3 @@ export interface AgentProvider {
 }
 
 export { SimulatedProvider } from "./simulated-provider.js";
-

@@ -14,6 +14,8 @@ export const eventTypeSchema = z.enum([
   "session.paused",
   "session.resumed",
   "session.completed",
+  "execution.requested",
+  "execution.pause_requested",
   "participant.joined",
   "participant.left",
   "driver.claimed",
@@ -24,6 +26,11 @@ export const eventTypeSchema = z.enum([
   "steering.approved",
   "steering.rejected",
   "steering.dispatched",
+  "steering.delivery_failed",
+  "provider.command_queued",
+  "provider.command_dispatched",
+  "provider.output_received",
+  "provider.failed",
   "checkpoint.created",
   "session.forked",
   "provider.execution_started",
@@ -74,4 +81,3 @@ export interface SessionView {
     instruction: string;
   }>;
 }
-

@@ -72,6 +72,14 @@ export class SessionAggregate {
     return [event("driver.transferred", meta, { fromId, toId })];
   }
 
+  claimDriver(participantId: string, meta: Metadata): PendingEvent[] {
+    this.requireParticipant(participantId);
+    if (this.driverId !== null) {
+      throw new DomainError("driver_already_assigned", "The session already has a driver");
+    }
+    return [event("driver.claimed", meta, { driverId: participantId })];
+  }
+
   proposeSteering(
     proposalId: string,
     proposerId: string,
@@ -87,10 +95,58 @@ export class SessionAggregate {
 
   approveSteering(proposalId: string, approverId: string, meta: Metadata): PendingEvent[] {
     this.requireDriver(approverId);
+    const proposal = this.proposals.get(proposalId);
+    if (!proposal) {
+      throw new DomainError("proposal_not_found", `Steering proposal ${proposalId} does not exist`);
+    }
+    return [
+      event("steering.approved", meta, {
+        proposalId,
+        approverId,
+        proposerId: proposal.proposerId,
+        instruction: proposal.instruction,
+      }),
+    ];
+  }
+
+  rejectSteering(proposalId: string, rejecterId: string, meta: Metadata): PendingEvent[] {
+    this.requireDriver(rejecterId);
     if (!this.proposals.has(proposalId)) {
       throw new DomainError("proposal_not_found", `Steering proposal ${proposalId} does not exist`);
     }
-    return [event("steering.approved", meta, { proposalId, approverId })];
+    return [event("steering.rejected", meta, { proposalId, rejecterId })];
+  }
+
+  steerDirect(instruction: string, driverId: string, meta: Metadata): PendingEvent[] {
+    this.requireDriver(driverId);
+    if (this.status !== "running") {
+      throw new DomainError("not_running", "Direct steering requires a running execution");
+    }
+    if (!instruction.trim()) throw new DomainError("empty_steering", "Steering instruction is required");
+    return [
+      event("steering.approved", meta, {
+        proposalId: null,
+        approverId: driverId,
+        proposerId: driverId,
+        instruction,
+        direct: true,
+      }),
+    ];
+  }
+
+  startExecution(meta: Metadata): PendingEvent[] {
+    if (this.status !== "created") {
+      throw new DomainError("invalid_transition", `Cannot start a ${this.status} session`);
+    }
+    return [event("execution.requested", meta, {}), event("session.started", meta, {})];
+  }
+
+  resume(actorId: string, meta: Metadata): PendingEvent[] {
+    this.requireDriver(actorId);
+    if (this.status !== "paused") {
+      throw new DomainError("not_paused", "Only a paused session can be resumed");
+    }
+    return [event("session.resumed", meta, { actorId })];
   }
 
   pause(actorId: string, reason: string, meta: Metadata): PendingEvent[] {
@@ -98,7 +154,10 @@ export class SessionAggregate {
     if (this.status !== "running") {
       throw new DomainError("not_running", "Only a running session can be paused");
     }
-    return [event("session.paused", meta, { actorId, reason, emergency: true })];
+    return [
+      event("execution.pause_requested", meta, { actorId, reason, emergency: true }),
+      event("session.paused", meta, { actorId, reason, emergency: true }),
+    ];
   }
 
   view(): SessionView {
@@ -161,9 +220,11 @@ export class SessionAggregate {
         break;
       }
       case "steering.approved":
-      case "steering.rejected":
-        this.proposals.delete(requiredString(payload, "proposalId"));
+      case "steering.rejected": {
+        const proposalId = payload.proposalId;
+        if (typeof proposalId === "string") this.proposals.delete(proposalId);
         break;
+      }
     }
   }
 }
@@ -181,4 +242,3 @@ function requiredString(payload: Record<string, unknown>, key: string): string {
   if (typeof value !== "string") throw new Error(`Invalid event payload: ${key}`);
   return value;
 }
-

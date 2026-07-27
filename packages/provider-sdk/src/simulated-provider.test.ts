@@ -8,6 +8,7 @@ describe("SimulatedProvider", () => {
       branchId: "b1",
       workspaceRef: "workspace",
       initialInstruction: "Implement auth",
+      idempotencyKey: "create-1",
     });
 
     await execution.start();
@@ -17,7 +18,7 @@ describe("SimulatedProvider", () => {
 
     const observed = [];
     for await (const item of execution.observations()) observed.push(item);
-    expect(observed).toHaveLength(3);
+    expect(observed).toHaveLength(5);
+    expect(observed.map((item) => item.sequence)).toEqual([1, 2, 3, 4, 5]);
   });
 });
-

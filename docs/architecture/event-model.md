@@ -18,13 +18,22 @@ Every event has an immutable envelope:
 Initial domain events:
 
 - `session.created`, `session.started`, `session.paused`, `session.resumed`, `session.completed`
+- `execution.requested`, `execution.pause_requested`
 - `participant.joined`, `participant.left`
 - `driver.claimed`, `driver.transferred`, `driver.released`
 - `comment.created`
 - `steering.proposed`, `steering.approved`, `steering.rejected`, `steering.dispatched`
 - `checkpoint.created`, `session.forked`
 - `provider.execution_started`, `provider.output_observed`, `provider.tool_started`, `provider.tool_completed`, `provider.interrupted`
+- `provider.command_queued`, `provider.command_dispatched`, `provider.output_received`, `provider.failed`
 - `artifact.created`
 
 Provider output can be high volume. It remains durable, but large binary bodies live in object storage and events contain content-addressed references.
 
+## Delivery operations
+
+The outbox exposes `pending`, `processing`, `delivered`, and `dead_letter`
+states. A processing row has a worker ID and lease expiry. Expired leases are
+eligible for another worker. Attempts use exponential backoff capped at five
+minutes and dead-letter after eight claims. `/health/ready` reports counts by
+state plus dispatcher and provider-worker health.

@@ -40,36 +40,9 @@ export class PostgresEventStore implements EventStore {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      await client.query(
-        "INSERT INTO event_streams (stream_id) VALUES ($1) ON CONFLICT DO NOTHING",
-        [streamId],
-      );
-      const head = await client.query<{ version: string }>(
-        "SELECT version FROM event_streams WHERE stream_id = $1 FOR UPDATE",
-        [streamId],
-      );
-      const actual = Number(head.rows[0]?.version ?? 0);
-      if (actual !== expectedVersion) throw new ConcurrencyError(streamId, expectedVersion, actual);
-
-      const committed: EventEnvelope[] = [];
-      for (const [offset, event] of pending.entries()) {
-        const envelope: EventEnvelope = {
-          ...event,
-          id: ulid(),
-          streamId,
-          sequence: expectedVersion + offset + 1,
-          occurredAt: new Date().toISOString(),
-        };
-        await insertEvent(client, envelope);
-        committed.push(envelope);
-      }
-      const nextVersion = expectedVersion + committed.length;
-      await client.query("UPDATE event_streams SET version = $2 WHERE stream_id = $1", [
-        streamId,
-        nextVersion,
-      ]);
+      const result = await appendWithinTransaction(client, streamId, expectedVersion, pending);
       await client.query("COMMIT");
-      return { nextVersion, events: committed };
+      return result;
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -77,6 +50,126 @@ export class PostgresEventStore implements EventStore {
       client.release();
     }
   }
+
+  async createSessionBranch(input: {
+    sessionId: string;
+    branchId: string;
+    organizationId: string;
+    title: string;
+    providerId: string;
+    createdBy: string;
+    events: PendingEvent[];
+  }): Promise<AppendResult> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO sessions (id, organization_id, title, provider_id, created_by)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [input.sessionId, input.organizationId, input.title, input.providerId, input.createdBy],
+      );
+      await client.query("INSERT INTO event_streams (stream_id) VALUES ($1)", [input.branchId]);
+      await client.query(
+        `INSERT INTO session_branches (id, session_id, name)
+         VALUES ($1, $2, 'main')`,
+        [input.branchId, input.sessionId],
+      );
+      const result = await appendWithinTransaction(client, input.branchId, 0, input.events);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async appendIdempotent(input: {
+    streamId: string;
+    expectedVersion: number;
+    events: PendingEvent[];
+    scope: string;
+    key: string;
+    requestHash: string;
+  }): Promise<AppendResult> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const existing = await client.query<{
+        request_hash: string;
+        response: AppendResult;
+      }>(
+        `SELECT request_hash, response FROM idempotency_keys
+         WHERE scope = $1 AND key = $2 FOR UPDATE`,
+        [input.scope, input.key],
+      );
+      const saved = existing.rows[0];
+      if (saved) {
+        if (saved.request_hash !== input.requestHash) {
+          throw new Error("IDEMPOTENCY_KEY_REUSED");
+        }
+        await client.query("COMMIT");
+        return saved.response;
+      }
+      const result = await appendWithinTransaction(
+        client,
+        input.streamId,
+        input.expectedVersion,
+        input.events,
+      );
+      await client.query(
+        `INSERT INTO idempotency_keys
+          (scope, key, request_hash, response, expires_at)
+         VALUES ($1, $2, $3, $4, now() + interval '24 hours')`,
+        [input.scope, input.key, input.requestHash, result],
+      );
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+}
+
+async function appendWithinTransaction(
+  client: PoolClient,
+  streamId: string,
+  expectedVersion: number,
+  pending: PendingEvent[],
+): Promise<AppendResult> {
+  await client.query(
+    "INSERT INTO event_streams (stream_id) VALUES ($1) ON CONFLICT DO NOTHING",
+    [streamId],
+  );
+  const head = await client.query<{ version: string }>(
+    "SELECT version FROM event_streams WHERE stream_id = $1 FOR UPDATE",
+    [streamId],
+  );
+  const actual = Number(head.rows[0]?.version ?? 0);
+  if (actual !== expectedVersion) throw new ConcurrencyError(streamId, expectedVersion, actual);
+
+  const committed: EventEnvelope[] = [];
+  for (const [offset, event] of pending.entries()) {
+    const envelope: EventEnvelope = {
+      ...event,
+      id: ulid(),
+      streamId,
+      sequence: expectedVersion + offset + 1,
+      occurredAt: new Date().toISOString(),
+    };
+    await insertEvent(client, envelope);
+    committed.push(envelope);
+  }
+  const nextVersion = expectedVersion + committed.length;
+  await client.query("UPDATE event_streams SET version = $2 WHERE stream_id = $1", [
+    streamId,
+    nextVersion,
+  ]);
+  return { nextVersion, events: committed };
 }
 
 async function insertEvent(client: PoolClient, event: EventEnvelope): Promise<void> {

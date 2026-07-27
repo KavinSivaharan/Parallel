@@ -4,7 +4,7 @@
   "packageManager": "pnpm@10.14.0",
   "scripts": {
     "build": "pnpm -r build",
-    "db:migrate": "docker compose exec -T postgres psql -U parallel -d parallel < apps/api/migrations/001_event_store.sql",
+    "db:migrate": "for file in apps/api/migrations/*.sql; do docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U parallel -d parallel < \"$file\"; done",
     "predev": "pnpm --filter './packages/**' build",
     "dev": "pnpm --parallel --filter @parallel/api --filter @parallel/web dev",
     "lint": "pnpm -r lint",

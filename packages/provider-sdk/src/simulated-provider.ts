@@ -6,6 +6,11 @@ import type {
   ProviderObservation,
 } from "./index.js";
 
+type WithoutObservationIdentity<T> = T extends unknown
+  ? Omit<T, "id" | "sequence">
+  : never;
+type ProviderObservationInput = WithoutObservationIdentity<ProviderObservation>;
+
 export class SimulatedProvider implements AgentProvider {
   readonly id = "simulator";
   readonly capabilities: ProviderCapabilities = {
@@ -26,6 +31,7 @@ class SimulatedExecution implements ProviderExecution {
   private waiters: Array<() => void> = [];
   private disposed = false;
   private cursor = 0;
+  private nextSequence = 1;
   private readonly seenSteering = new Set<string>();
 
   constructor(
@@ -46,6 +52,18 @@ class SimulatedExecution implements ProviderExecution {
     if (this.seenSteering.has(idempotencyKey)) return;
     this.seenSteering.add(idempotencyKey);
     this.push({ kind: "output", channel: "commentary", text: `Steering accepted: ${instruction}` });
+    this.push({
+      kind: "tool",
+      phase: "completed",
+      name: "write_file",
+      callId: `tool-${idempotencyKey}`,
+    });
+    this.push({
+      kind: "artifact",
+      mediaType: "text/plain",
+      name: "simulated-change.txt",
+      bytes: new TextEncoder().encode(`Applied steering: ${instruction}\n`),
+    });
   }
 
   async pause(): Promise<{ cursor: string }> {
@@ -70,7 +88,7 @@ class SimulatedExecution implements ProviderExecution {
     while (!this.disposed || this.queue.length > 0) {
       const next = this.queue.shift();
       if (next) {
-        this.cursor += 1;
+        this.cursor = next.sequence;
         yield next;
       } else {
         await new Promise<void>((resolve) => this.waiters.push(resolve));
@@ -78,8 +96,13 @@ class SimulatedExecution implements ProviderExecution {
     }
   }
 
-  private push(observation: ProviderObservation): void {
-    this.queue.push(observation);
+  private push(observation: ProviderObservationInput): void {
+    const sequence = this.nextSequence++;
+    this.queue.push({
+      ...observation,
+      id: `${this.id}:${sequence}`,
+      sequence,
+    } as ProviderObservation);
     this.wake();
   }
 
@@ -87,4 +110,3 @@ class SimulatedExecution implements ProviderExecution {
     this.waiters.splice(0).forEach((resolve) => resolve());
   }
 }
-

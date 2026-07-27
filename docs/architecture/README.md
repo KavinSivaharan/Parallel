@@ -33,8 +33,9 @@ flowchart TB
 - [ADR 0001: modular monolith](decisions/0001-modular-monolith.md)
 - [ADR 0002: event sourcing](decisions/0002-event-sourcing.md)
 - [ADR 0003: realtime delivery](decisions/0003-realtime-delivery.md)
+- [ADR 0004: development identity boundary](decisions/0004-development-identity-boundary.md)
+- [ADR 0005: at-least-once outbox](decisions/0005-at-least-once-outbox.md)
 - [Event model](event-model.md)
 - [Database model](database.md)
 - [Provider protocol](provider-protocol.md)
 - [API](../api.md)
-

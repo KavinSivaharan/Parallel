@@ -63,5 +63,31 @@ describe("SessionAggregate", () => {
     const leaving = aggregate.leave("alice", meta);
     expect(leaving.map(({ type }) => type)).toEqual(["participant.left", "driver.released"]);
   });
-});
 
+  it("rejects direct steering before execution starts", () => {
+    const aggregate = SessionAggregate.rehydrate(
+      "branch-1",
+      committed(SessionAggregate.create("branch-1", "alice", "simulator", meta)),
+    );
+    expect(() => aggregate.steerDirect("Continue", "alice", meta)).toThrowError(
+      expect.objectContaining({ code: "not_running" }),
+    );
+  });
+
+  it("allows emergency pause by a participant and records the request", () => {
+    const initial = SessionAggregate.create("branch-1", "alice", "simulator", meta);
+    const started: PendingEvent = {
+      type: "session.started",
+      schemaVersion: 1,
+      actor,
+      causationId: "cmd-start",
+      correlationId: "corr-1",
+      payload: {},
+    };
+    const aggregate = SessionAggregate.rehydrate("branch-1", committed([...initial, started]));
+    expect(aggregate.pause("alice", "Unsafe command", meta).map((item) => item.type)).toEqual([
+      "execution.pause_requested",
+      "session.paused",
+    ]);
+  });
+});
